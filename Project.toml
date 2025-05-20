@@ -1,0 +1,13 @@
+name = "MTKNeuralToolkit"
+uuid = "88376828-b154-4662-bcd7-a3562b4741f6"
+authors = ["Dhruva V. Raman", "Elouan Simonneau"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.11"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
