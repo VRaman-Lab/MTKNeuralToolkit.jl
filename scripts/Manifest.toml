@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.11.5"
+julia_version = "1.11.4"
 manifest_format = "2.0"
 project_hash = "d9983148840a73c0cd65ae92a202b72ae32ecdf9"
 
@@ -1191,8 +1191,8 @@ uuid = "d8e11817-5142-5d16-987a-aa16d5891078"
 version = "0.4.17"
 
 [[deps.MTKNeuralToolkit]]
-deps = ["Distributions", "ModelingToolkit", "ModelingToolkitStandardLibrary", "OrdinaryDiffEq"]
-path = "/Users/dr360/.julia/dev/MTKNeuralToolkit/scripts/.."
+deps = ["Distributions", "ModelingToolkit", "ModelingToolkitStandardLibrary", "OrdinaryDiffEq", "Pkg"]
+path = "c:\\newrepo\\MTKNeuralToolkit\\scripts\\.."
 uuid = "88376828-b154-4662-bcd7-a3562b4741f6"
 version = "0.0.1-DEV"
 
@@ -1425,7 +1425,7 @@ version = "0.3.27+1"
 [[deps.OpenLibm_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
-version = "0.8.5+0"
+version = "0.8.1+4"
 
 [[deps.OpenSSL]]
 deps = ["BitFlags", "Dates", "MozillaCACerts_jll", "OpenSSL_jll", "Sockets"]

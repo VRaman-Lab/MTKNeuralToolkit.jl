@@ -5,13 +5,15 @@ Pkg.develop(path = joinpath(@__DIR__, ".."))
 using ModelingToolkit
 using OrdinaryDiffEq
 using ModelingToolkitStandardLibrary.Blocks: Constant, TimeVaryingFunction 
-using MTKNeuralToolkit  # replace with your actual package name
+using MTKNeuralToolkit 
 import MTKNeuralToolkit.HodgkinHuxley as HH
+import MTKNeuralToolkit
+#using script_utils.jl
 using Plots
 
 
-
-Na =    build_channel(HH.NaGates(;g=40, E = 55), FixedReversal(;E=55); name = :Na)
+#Specify inputs
+Na =    build_channel(HH.NaGates(;g=40, E = 55), FixedReversal(;E=55); name = :Na)      
 K =     build_channel(HH.KGates( ;g=35, E = -77), FixedReversal(;E=-77); name = :K)
 Leak =  build_channel(HH.LGates( ;g=0.3, E = -65), FixedReversal(;E=-65); name = :Leak)
 

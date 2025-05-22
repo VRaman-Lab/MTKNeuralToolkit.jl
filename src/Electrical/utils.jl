@@ -68,5 +68,18 @@ function build_neuron(neuron; channels, input)
      return connected_system
  end
 
+function build_synapse(channel, pre_n, post_n)
+    channel_connection = [
+        connect(channel.p, post_n.p),
+        connect(channel.n, post_n.n),
+        connect(pre_n.V, channel.v),
+        connect(post_n.V, channel.v_post)
+        ]
+
+    connected_system = compose(ODESystem(channel_connection, t, name=nameof(channel)), 
+                              [channel, pre_n, post_n])
+    return connected_system
+end
+
 
 
