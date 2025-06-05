@@ -11,13 +11,13 @@ import MTKNeuralToolkit.HodgkinHuxley as HH
 #using script_utils.jl
 using Plots
 
-function build_HH(input=nothing; name)
+function build_HH(input=nothing; name=:soma)
 
     Na = build_channel(HH.NaGates(;g=40, E = 55), FixedReversal(;E=55); name = :Na)      
     K = build_channel(HH.KGates( ;g=35, E = -77), FixedReversal(;E=-77); name = :K)
     Leak = build_channel(HH.LGates( ;g=0.3, E = -65), FixedReversal(;E=-65); name = :Leak)
 
-    fn=BasicSoma(; C=1, name = :soma)
+    fn=BasicSoma(; C=1, name = name)
 
     if input === nothing
         neur = build_neuron(fn; channels = [Na, K, Leak])
@@ -28,8 +28,8 @@ function build_HH(input=nothing; name)
 end
 @named inp = TimeVaryingFunction(f=t -> sin(t))
 
-@named pre_neur = build_HH(inp)
-@named post_neur = build_HH()
+@named pre_neur = build_HH(inp; name=:pre_neur)
+@named post_neur = build_HH(;name=:post_neur)
 #println(typeof(pre_neur.soma.p))
 @named syn_channel = Synapse.E_syn_gates(;g=0.1, E = 0.0, name =:exc_syn)
 synapse = add_synapse(syn_channel, pre_neur, post_neur)
@@ -38,4 +38,10 @@ synapse = structural_simplify(synapse)
 prob = ODEProblem(synapse, Pair[], (0.0, 200.0) )
 sol = solve(prob, Tsit5());
 
-p = plot(sol)
+#println(states(synapse))
+#=
+to_plot = [sol[exc_syn.s], sol[pre_neur.pre_neur.v], sol[post_neur.post_neur.v]]
+labels = ["exc_syn.s" "pre_neur.v" "post_neur.v"]
+plot(sol.t, specific_vars, label=labels)
+=#
+plot(sol, idxs=[1, 5, 9]) 

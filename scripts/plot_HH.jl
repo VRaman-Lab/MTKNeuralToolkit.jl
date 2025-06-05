@@ -26,7 +26,7 @@ Leak =  build_channel(HH.LGates( ;g=0.3, E = -65), FixedReversal(;E=-65); name =
 fn = BasicSoma(; C=1, name = :soma)
 
 # neur = build_neuron(fn, channels = [leak, pot, sod], input = inp)
-neur = build_neuron(fn, channels = [Na, K, Leak], input = inp)
+neur = build_neuron(fn, inp; channels = [Na, K, Leak])
 neur = structural_simplify(neur) 
 
 prob = ODEProblem(neur, Pair[], (0.0, 200.0) )

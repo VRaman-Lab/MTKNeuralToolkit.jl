@@ -10,7 +10,7 @@
     @variables begin
         s_hat(t)
         tau_s(t)
-        s(t)
+        s(t) = 0.0
     end
     @equations begin
         s_hat ~ 1.0 / (1.0 + exp((Vth - v_pre) / sigma))
@@ -32,7 +32,7 @@ end
     @variables begin
         s_hat(t)
         tau_s(t)
-        s(t)
+        s(t) = 0.0
     end
     @equations begin
         s_hat ~ 1.0 / (1.0 + exp((Vth - v_pre) / sigma))

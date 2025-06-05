@@ -22,7 +22,7 @@ CaS =  build_channel(Liu.CaSGates(;g=1.3), Liu.CalciumReversal(); name = :CaS)
 @named inp = TimeVaryingFunction(f=t -> sin(t))
 fn = Liu.CalciumSensitiveNeuron(; C=1, name = :soma)
 
-neur = build_neuron(fn, channels = [KCa, Na, CaS], input = inp)
+neur = build_neuron(fn, inp;  channels = [KCa, Na, CaS])
 neur = structural_simplify(neur) 
 
 prob = ODEProblem(neur, [neur.CaS.conductance.g => 1.3], (0.0, 20.0) )

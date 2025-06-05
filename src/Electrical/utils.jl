@@ -92,8 +92,8 @@ function build_neuron(neuron; channels)
 
 function add_synapse(channel, pre_neuron, post_neuron)
     channel_connection = [
-        connect(channel.pre, pre_neuron.soma.p),
-        connect(channel.post, post_neuron.soma.p),
+        connect(channel.pre, pre_neuron.pre_neur.p),
+        connect(channel.post, post_neuron.post_neur.p),
         #connect(channel.ground, pre_neuron.soma.n),
         #connect(channel.ground, post_neuron.soma.n)
     ]
