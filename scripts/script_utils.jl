@@ -1,13 +1,5 @@
-function select_time_varying_function(inp::String, default_const=1.0)
-   functions = Dict(
-       "sin" => sin,
-       "cos" => cos,
-       "exp" => exp,
-       "log" => log,
-       "constant" => t -> default_const
-   )
-   return functions[inp]
-end
+#include("script_types.jl")
+
 
 function build_network(inpHH::Vector, inpLiu::Vector, inpIF::Vector, noinpHH::Int, noinpLiu::Int, noinpIF::Int,connections::Vector)
     iterator = 0
@@ -61,7 +53,7 @@ function build_network(inpHH::Vector, inpLiu::Vector, inpIF::Vector, noinpHH::In
     return structural_simplify(final_system)
 end
 
-function build_IF(input=nothing, name=:IF)
+function build_IF(input=nothing; name=:IF)
     string = ("Not implemented yet :(")
     println(string)
     println("Your code will crash in:")
@@ -110,11 +102,16 @@ function build_Liu(input=nothing; name=:soma)
     return(neur)
 end
 
-function put_synapse(pre, post, isE::Bool, weight::Float64; name=:syn)
-    if isE
-        @named syn_channel = Synapse.E_syn_gates(;g=weight, name =name)
-    else
-        @named syn_channel = Synapse.I_syn_gates(;g=weight, name =name)
+function put_synapse(pre, post, syn_type::SynapseType, weight::Float64; name=:syn, custom_synapse::Union{CustomSynapseParams, Nothing}=nothing)
+    if syn_type == Exc
+        @named syn_channel = Synapse.E_syn_gate_preset(;g=weight, name =name)
+    elseif syn_type == Inh
+        @named syn_channel = Synapse.I_syn_gate_preset(;g=weight, name =name)
+    elseif syn_type == Custom
+        if custom_synapse === nothing
+            throw(ArgumentError("If you want a custom synapse, you need to give a custom synapse, smartypants"))
+        end
+        @named syn_channel = custom_synapse(;g=weight, custom_synapse.E, custom_synapse.Vth, custom_synapse.k_, custom_synapse.sigma, name=name)
     end
     return add_synapse(syn_channel, pre, post)
 end

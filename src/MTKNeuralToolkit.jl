@@ -21,4 +21,6 @@ include("Liu/Liu.jl")
 
 include("Synapse/Synapse.jl")
 
+include("Types.jl")
+
 end
