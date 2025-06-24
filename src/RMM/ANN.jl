@@ -28,27 +28,28 @@
     end
 end=#
 
-function ANN(; name)
-    @variables v(t) i(t)
-    @parameters g=1.0 E=-65.0
+function ANN(; g=1.0, E=-65.0, name=:ann_gate)
+    @named oneport = OnePort()
+    @variables t  nn_out(t)
+    @parameters g=g E=E
     
     # Create the neural network component manually
     chain = multi_layer_feed_forward(1, 1)
-    @named nn = NeuralNetworkBlock(; n_input=1, n_output=1, 
-                                   chain=chain, rng=Xoshiro(42))
-    
-    # Create OnePort manually
-    @named oneport = OnePort()
-    
+    NN, params = SymbolicNeuralNetwork(chain=chain, n_input=1, n_output=1, 
+                                     rng=Xoshiro(42))
+
     eqs = [
-        v ~ oneport.v,
-        i ~ oneport.i,
-        connect(nn.input, [v]),  # Connect voltage to NN input
-        i ~ g * nn.output.u * log10(v - E)
+        nn_out ~ NN([oneport.v], params)[1]
+        oneport.i ~ g * nn_out * (oneport.v - E)
     ]
     
-    return ODESystem(eqs, t, [v, i], [g, E]; 
-                    systems=[oneport, nn], name=name)
+    #return ODESystem(eqs, t, [v, i, nn_out, oneport.p, oneport.n], [g, E, p]; systems=[oneport], name=name)
+    #sys = ODESystem(eqs, t, [v, i, nn_out], [g, E, params];name=name)
+    #return extend(sys, oneport)
+    
+    return ODESystem(eqs, ModelingToolkit.t_nounits; systems = [oneport], name=name)
+    #return extend(sys, oneport)
+
 end
 
 

@@ -216,7 +216,6 @@ end
 # connect(Kca.a.p, soma.ca.n )
 # connect(Kca.)
 
-
 NaGates(  ;name=:conductance , kwargs...) = nagates( ;name , kwargs...)
 KCaGates( ;name=:conductance , kwargs...) = kcagates( ;name, kwargs...)
 CaSGates( ;name=:conductance , kwargs...) = casgates(;name , kwargs...)
