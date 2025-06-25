@@ -8,7 +8,7 @@ using ModelingToolkit: t_nounits as t, D_nounits as D
 
 include("Electrical/utils.jl")
 
-export build_channel, build_channel_ann, build_channel_annv2, build_neuron, build_calcium_neuron, build_minimal_channel, build_calcium_channel, build_full_channel, add_synapse, add_synapse_nu
+export build_channel, build_channel_ann, build_RMM, build_neuron, build_calcium_neuron, build_minimal_channel, build_calcium_channel, build_full_channel, add_synapse, add_synapse_nu
 
 include("Electrical/components.jl")
 

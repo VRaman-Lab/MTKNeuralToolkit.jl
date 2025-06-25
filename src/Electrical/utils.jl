@@ -147,3 +147,11 @@ function add_synapse(channel, pre_neuron, post_neuron)
     return connected_system
 end
 
+function build_RMM(LTI, ANN;name)
+    connections = [
+        connect(LTI.i, ANN.nn_in)
+    ]
+    
+    connected_system = compose(ODESystem(connections, t; name), [lti_filter, ann_readout])
+    return connected_system
+end
