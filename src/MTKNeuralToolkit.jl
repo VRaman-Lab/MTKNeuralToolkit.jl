@@ -5,6 +5,7 @@ using ModelingToolkit
 using ModelingToolkitStandardLibrary.Electrical
 using ModelingToolkitStandardLibrary.Blocks: Constant, RealInput, TimeVaryingFunction, Sum
 using ModelingToolkit: t_nounits as t, D_nounits as D
+using Random
 
 include("Electrical/utils.jl")
 
@@ -28,6 +29,6 @@ export SYNAPSE_TYPES, NEURON_TYPES, CustomSynapseParams
 
 include("RMM/RMM.jl")
 
-export ANN, create_ann_model
+export RMMVec, RMMScal, RMMVecf
 
 end

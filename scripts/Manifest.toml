@@ -1412,7 +1412,7 @@ uuid = "d8e11817-5142-5d16-987a-aa16d5891078"
 version = "0.4.17"
 
 [[deps.MTKNeuralToolkit]]
-deps = ["Distributions", "Lux", "ModelingToolkit", "ModelingToolkitNeuralNets", "ModelingToolkitStandardLibrary", "OrdinaryDiffEq", "Pkg", "SciMLStructures"]
+deps = ["Distributions", "Lux", "ModelingToolkit", "ModelingToolkitNeuralNets", "ModelingToolkitStandardLibrary", "OrdinaryDiffEq", "Pkg", "Random", "SciMLStructures"]
 path = "C:\\Users\\eloya\\source\\thesis\\dhruvarmaggedon\\MTKNeuralToolkit\\scripts\\.."
 uuid = "88376828-b154-4662-bcd7-a3562b4741f6"
 version = "0.0.1-DEV"

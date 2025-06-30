@@ -35,50 +35,12 @@ function build_channel(conductance, reversal;name)
     return compose(ODESystem(connections, t; name), [p,n,conductance,reversal])
 end
 
-function build_channel_ann(conductance, reversal;name)
-
-    @named p = Pin()
-    @named n = Pin()
-    connections = [
-        connect(conductance.oneport.p, reversal.n)
-        connect(conductance.oneport.n, n)
-        connect(reversal.p, p)
-    ]
-     return compose(ODESystem(connections, t; name), [p,n,conductance,reversal])
-end
-
-function build_channel_annv2(conductance, reversal;name)
-
-    connections = [
-        connect(conductance.oneport.p, reversal.n)
-        connect(reversal.p, conductance.oneport.p)
-    ]
-     return compose(ODESystem(connections, t; name), [conductance,reversal])
-end
-
- # function build_neuron(neuron; channels, input)
- #     channel_connections = [[
- #         connect(channel.p, neuron.p),
- #         connect(neuron.ground.g, neuron.n, channel.n)
- #     ] for channel in channels]
-
- #     input_connection = connect(input.output, neuron.I)
- #     connections = vcat(channel_connections..., input_connection)
- #     connected_system = compose(ODESystem(connections, t, name=nameof(neuron)), [channels..., neuron,input])
- #     return connected_system
- # end
-
 function build_neuron(neuron, input; channels)
      channel_connections = [[
          connect(channel.p, neuron.p),
          connect(neuron.ground.g, neuron.n, channel.n)
      ] for channel in channels]
 
-    #=println("__________________")
-    println("channel_connections")
-    println(channel_connections)
-    println("__________________")
-    =#
      input_connection = connect(input.output, neuron.I)
      calcium_connection = [[
                         connect(channel.reversal.ca.p, neuron.ca.p),            
@@ -91,10 +53,6 @@ function build_neuron(neuron, input; channels)
      ] for channel in channels if hasproperty(channel.conductance, :ca) ]
 
      connections = vcat(channel_connections..., input_connection, calcium_connection..., calcium_flux_connections...)
-    #=println("__________________")
-    println("connections")
-    println(connections)
-    println("__________________")=#
      connected_system = compose(ODESystem(connections, t, name=nameof(neuron)), [channels..., neuron,input])
      return connected_system
  end
@@ -144,14 +102,5 @@ function add_synapse(channel, pre_neuron, post_neuron)
 
     connected_system = compose(ODESystem(channel_connection, t, name=nameof(channel)),
         [channel, pre_neuron, post_neuron])
-    return connected_system
-end
-
-function build_RMM(LTI, ANN;name)
-    connections = [
-        connect(LTI.i, ANN.nn_in)
-    ]
-    
-    connected_system = compose(ODESystem(connections, t; name), [lti_filter, ann_readout])
     return connected_system
 end

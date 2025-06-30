@@ -27,9 +27,28 @@ using Plots
 #network = build_network([inp, inp2], [], [], 5, 0, 0, connections)
 
 #--Workflow 2
+#=
+f1() = build_hh()
+f2()
+...
 
+function build_syn1()
+end 
+
+
+
+A = [f1, f2]
+
+syn_dict = Dict(
+    (1,2) => syn1
+)
+
+build_network(array_of_neurons, dict_of_synapses)
+(or calls to neurons)
+=#
 @named n1 = build_Liu(inp; name=:n1)
 @named n2 = build_HH(;name=:n2)
+
 s1 = put_synapse(n1,n2,:Exc,0.1; name=:s1)
 network = compose(ODESystem([], t; name=:network), [s1])
 network = structural_simplify(network)
