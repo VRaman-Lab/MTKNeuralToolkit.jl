@@ -47,6 +47,7 @@ end
         g, [description = "Conductance"]
     end
     @variables begin
+        Ca(t), [description = "Calcium concentration"]
         m(t)=0.0, [description = "m gate"]
         h(t)=1.0, [description = "h gate"]
         m∞(t), [description = "steady state m opening"]
@@ -55,15 +56,25 @@ end
         τh(t), [description = "h gate time constant"]
         E(t), [description = "reversal potential"]
     end
+    @components begin
+        ca = IonicPort()
+        ICa = RealInput()
+    end
     @equations begin
         m∞ ~ 1.0 / (1.0 + exp((v+E + 33.0) / -8.1))
         h∞ ~ 1.0 / (1.0 + exp((v+E + 60.0) / 6.2))
         τm ~ 1.4 + 7.0 / (exp((v+E + 27.0) / 10.0) + exp((v+E + 70.0) / -13.0))
         τh ~ 60.0 + 150.0 / (exp((v+E + 55.0) / 9.0) + exp((v+E + 65.0) / -16.0))
+        ca.i ~ i
+        Ca ~ ca.q
+        ICa.u ~ i
         D(m) ~  (1/τm)*(m∞ - m) 
         D(h) ~ (1/τh)*(h∞ - h)
-        v ~ E # TODO CHECK CONSISTENCY!!!
-        i ~ g * m^3*h * v 
+        #Ca ~ E # TODO CHECK CONSISTENCY!!!
+        E ~ (500.0) * (8.6174e-5) * (283.15) * log(max((3000.0 / Ca), 0.001))
+
+        #i ~ g * m^3*h * v 
+        i ~ g * m^3*h * (v - E)
     end
 end
 
@@ -73,6 +84,7 @@ end
         g, [description = "Conductance"]
     end
     @variables begin
+        Ca(t), [description = "Calcium concentration"]
         m(t)=0.0, [description = "m gate"]
         h(t)=1.0, [description = "h gate"]
         m∞(t), [description = "steady state m opening"]
@@ -81,15 +93,25 @@ end
         τh(t), [description = "h gate time constant"]
         E(t), [description = "reversal potential"]
     end
+    @components begin
+        ca = IonicPort()
+        ICa = RealInput()
+    end
     @equations begin
         m∞ ~ 1.0 / (1.0 + exp((v+E + 27.1) / -7.2))
         h∞ ~ 1.0 / (1.0 + exp((v+E + 32.1) / 5.5))
         τm ~ 21.7 - 21.3 / (1.0 + exp((v+E +68.1) / -20.5))
-        τh ~ 150.0 - 89.8 / (1.0 + exp((v+E + 55.0) / 16.9))
+        τh ~ 105.0 - 89.8 / (1.0 + exp((v+E + 55.0) / 16.9))
+        ca.i ~ i
+        Ca ~ ca.q
+        ICa.u ~ i
         D(m) ~  (1/τm)*(m∞ - m) 
         D(h) ~ (1/τh)*(h∞ - h)
-        v ~ E # TODO CHECK CONSISTENCY!!!
-        i ~ g * m^3*h * v 
+        #Ca ~ E # TODO CHECK CONSISTENCY!!!
+        E ~ (500.0) * (8.6174e-5) * (283.15) * log(max((3000.0 / Ca), 0.001))
+
+        #i ~ g * m^3*h * v 
+        i ~ g * m^3*h * (v - E)
     end
 end
 
@@ -115,7 +137,7 @@ end
         τm ~ 90.3 - 75.1 / (1.0 + exp((v+E + 46.0) / -22.7));
         D(m) ~  (1/τm)*(m∞ - m) 
         i ~ g * m^4 * v 
-        ca.i ~ i
+        #ca.i ~ i
         Ca ~ ca.q
         ICa.u ~ i
     end

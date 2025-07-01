@@ -42,17 +42,18 @@ function build_neuron(neuron, input; channels)
      ] for channel in channels]
 
      input_connection = connect(input.output, neuron.I)
-     calcium_connection = [[
-                        connect(channel.reversal.ca.p, neuron.ca.p),            
-                        connect(neuron.ca.n,  channel.reversal.ca.n)            
-                    ] for channel in channels if hasproperty(channel.reversal, :ca) ]
+     #calcium_connection = [[
+     #                   connect(channel.reversal.ca.p, neuron.ca.p),            
+     #                   connect(neuron.ca.n,  channel.reversal.ca.n),
+     #                   #println("Triggered")            
+     #] for channel in channels if hasproperty(channel.reversal, :ca) ]
 
     calcium_flux_connections = [[
             connect(channel.conductance.ca.p, neuron.ca.p),
-            # connect(neuron.ca.n, channel.conductance.ca.p),
+            connect(neuron.ca.n, channel.conductance.ca.n),          
      ] for channel in channels if hasproperty(channel.conductance, :ca) ]
 
-     connections = vcat(channel_connections..., input_connection, calcium_connection..., calcium_flux_connections...)
+     connections = vcat(channel_connections..., input_connection, calcium_flux_connections...)
      connected_system = compose(ODESystem(connections, t, name=nameof(neuron)), [channels..., neuron,input])
      return connected_system
  end
@@ -71,10 +72,10 @@ function build_neuron(neuron; channels)
 
     calcium_flux_connections = [[
             connect(channel.conductance.ca.p, neuron.ca.p),
-            # connect(neuron.ca.n, channel.conductance.ca.p),
+            connect(neuron.ca.n, channel.conductance.ca.n),
      ] for channel in channels if hasproperty(channel.conductance, :ca) ]
 
-     connections = vcat(channel_connections..., input_connection, calcium_connection..., calcium_flux_connections...)
+     connections = vcat(channel_connections..., input_connection, calcium_flux_connections...)
      connected_system = compose(ODESystem(connections, t, name=nameof(neuron)), [channels..., neuron])
      return connected_system
  end
