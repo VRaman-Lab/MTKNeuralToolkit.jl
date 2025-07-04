@@ -20,6 +20,22 @@ using Plots
 #Neurons are added to a dict depending on when they were created, which depends on their location within the build_network args.
 #If 3 input HHs and 1 input Liu, the first non-input HH will be n4, the first non-input LIF will be n$(all_previously_made_neurons+1)
 
+
+
+#s1() = Synpase(bla)
+#=
+@named inp2 = TimeVaryingFunction(f=t -> exp(sin(t)))
+neurons = Dict(
+    "AB" => build_Liu(inp2;name=:AB),
+    "PD" => build_Liu(;name=:PD),
+    "LP" => build_Liu(;name=:LP)
+) 
+connections = Dict(
+    ("AB", "LP") => (type=:Inh, weight=1.0),
+    ("PD", "LP") => (type=:Inh, weight=1.0),
+    ("LP", "PD") => (type=:Inh, weight=1.0)
+)
+network = build_network(connections, neurons)=#
 @named inp = TimeVaryingFunction(f=t -> min(log(t,10), 1.0))
 @named inp2 = TimeVaryingFunction(f=t -> exp(sin(t)))
 #--Workflow 1
@@ -35,7 +51,8 @@ connections = Dict(
     ("n2", "n5") => (type=:Inh, weight=1.0),
     ("n2", "n6") => (type=:Inh, weight=1.0)
 )
-network = build_network(connections, inpHH=[inp, inp2], noinpHH=5)
+network2 = build_network_quick(connections; inpHH=[inp, inp2], noinpHH=5)=#
+#network = build_networkv2(connections, neurons)
 #--Workflow 2
 #=
 @named n1 = build_Liu(inp; name=:n1)
@@ -47,8 +64,9 @@ network = structural_simplify(network)=#
 #If using Liu neurons change solver from Tsit5 -> TRBDF2. 
 #Might need to manually give more maxiters as well through solve(x,y, maxiters=[more lol])
 
-prob = ODEProblem(network, Pair[], (0.0, 500.0) )
+prob = ODEProblem(network2, Pair[], (0.0, 500.0))
 #inspect_network(network)
 sol = solve(prob, TRBDF2());
 
-plot(sol, idxs=parse_sol_for_membrane_voltages(sol), size=(1000, 800))
+p = plot(sol, idxs=parse_sol_for_membrane_voltages(sol), size=(1000, 800))
+gui(p)

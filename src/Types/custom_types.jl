@@ -1,4 +1,4 @@
-const SYNAPSE_TYPES = (:Exc, :Inh, :Custom)
+const SYNAPSE_TYPES = (:Exc, :Inh, :Custom, :Chol, :Glut)
 const NEURON_TYPES = (:IF, :LIF, :HH, :Liu, :Custom)
 
 # Validation functions

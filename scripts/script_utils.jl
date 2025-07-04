@@ -1,6 +1,6 @@
 #include("script_types.jl")
 
-function build_network(connections::Dict; custom_neurons::Vector=[],
+function build_network_quick(connections::Dict; custom_neurons::Vector=[],
     inpHH::Vector=[], inpLiu::Vector=[], inpIF::Vector=[], 
     noinpHH::Int=0, noinpLiu::Int=0, noinpIF::Int=0, allowCreateIndependentNeurons::Bool=false)
     if isempty(connections)
@@ -9,8 +9,8 @@ function build_network(connections::Dict; custom_neurons::Vector=[],
     iterator = 1
     neurons = Dict{String, Any}()
     network = []
-    for _ in custom_neurons
-        neurons["n$iterator"] = custom_neurons
+    for (i, neuron) in enumerate(custom_neurons)
+        neurons["n$iterator"] = neuron
         iterator+=1
     end
     for inp in inpHH
@@ -61,14 +61,77 @@ function build_network(connections::Dict; custom_neurons::Vector=[],
         end
         iterator+=1
     end
-    for ((pre, post), (conn_params)) in connections
-        x = put_synapse(neurons[pre], neurons[post], conn_params.type, conn_params.weight; name=Symbol("s_$(pre)$(post)"))
-        push!(network, x)
-    end
+    create_network_from_connections(connections, neurons, network)
     final_system = compose(ODESystem([], t; name=:network), network)
     return structural_simplify(final_system)
 end
 
+function build_network(connections::Dict, neurons::Dict)
+    #To be used for custom neuron-synapse naming schemes
+    if isempty(connections)
+        error("Connections must be provided.")
+    end
+    if isempty(neurons)
+        error("Neurons must be provided.")
+    end
+    network = []
+    network = create_network_from_connections(connections, neurons, network)
+    final_system = compose(ODESystem([], t; name=:network), network)
+    return structural_simplify(final_system)
+end
+
+function build_network(connections::Dict, neurons::Vector)
+    #To be used for programmatic neuron naming
+    #Beware that neurons will not have the same name when declaring connections as they will have symbolically within the system
+    if isempty(connections)
+        error("Connections must be provided.")
+    end
+    if isempty(neurons)
+        error("Neurons must be provided.")
+    end
+    neurons_dict = Dict("n$i" => neuron for (i, neuron) in enumerate(neurons))
+    network = []
+    network = create_network_from_connections(connections, neurons, neurons_dict)
+    final_system = compose(ODESystem([], t; name=:network), network)
+    return structural_simplify(final_system)
+end
+
+
+function create_network_from_connections(connections::Dict{Tuple{String, String}, @NamedTuple{type::Symbol, weight::Float64}}, neurons::Dict, network::Vector)
+    for ((pre, post), (conn_params)) in connections
+        x = put_synapse(neurons[pre], neurons[post], conn_params.type, conn_params.weight; name=Symbol("s_$(pre)$(post)"))
+        push!(network, x)
+    end
+    return network
+end
+
+function create_network_from_connections(connections::Dict{Tuple{String, String}, Function}, neurons::Dict, network::Vector)
+    for ((pre, post), (synapse_func)) in connections
+        @named x = synapse_func()
+        y = add_synapse(x, neurons[pre], neurons[post])
+        push!(network, y)
+    end
+    return network
+end
+
+function put_synapse(pre, post, synapse_type::Symbol, weight::Float64; name=:syn, custom_synapse::Union{CustomSynapseParams, Nothing}=nothing)
+    synapse_type in SYNAPSE_TYPES || throw(ArgumentError("Invalid synapse type"))
+    if synapse_type == :Exc
+        @named syn_channel = Synapse.E_syn_gate_preset(;g=weight, name =:E_Syn)
+    elseif synapse_type == :Inh
+        @named syn_channel = Synapse.I_syn_gate_preset(;g=weight, name =:I_syn)
+    elseif synapse_type == :Chol
+        @named syn_channel = Synapse.CholinergicSynapse(;g=weight, name =:Chol_syn)
+    elseif synapse_type == :Glut
+        @named syn_channel = Synapse.GlutamatergicSynapse(;g=weight, name =:Glut_syn)
+    elseif synapse_type == :Custom
+        if custom_synapse === nothing
+            throw(ArgumentError("If you want a custom synapse, you need to give a custom synapse, smartypants"))
+        end
+        @named syn_channel = custom_synapse(;g=weight, custom_synapse.E, custom_synapse.Vth, custom_synapse.k_, custom_synapse.sigma, name=name)
+    end
+    return add_synapse(syn_channel, pre, post)
+end
 function build_IF(input=nothing; name=:IF)
     string = ("Not implemented yet :(")
     println(string)
@@ -100,14 +163,14 @@ function build_Liu(input=nothing; name=:soma)
 
     Na =   build_channel(Liu.NaGates(;g=100, E = 50.0), FixedReversal(;E=50.0); name = :Na)
     KCa =  build_channel(Liu.KCaGates(;g=10.0, E = -80.0), FixedReversal(;E=-80.0); name = :KCa)
-    CaS =  build_channel(Liu.CaSGates(;g=1.3), Liu.CalciumReversal(); name = :CaS)
-    CaT =  build_channel(Liu.CaTGates(;g=3.0), Liu.CalciumReversal(); name = :CaT)
+    CaS =  build_channel(Liu.CaSGates(;g=1.3), FixedReversal(;E=0.0); name = :CaS)
+    CaT =  build_channel(Liu.CaTGates(;g=3.0), FixedReversal(;E=0.0); name = :CaT)
     K =    build_channel(Liu.KGates(;g=5.0, E = -80.0), FixedReversal(;E=-80.0); name = :K)
     DRK =  build_channel(Liu.DRKGates(;g=20.0, E = -80.0), FixedReversal(;E=-80.0); name = :KDR)
     H =    build_channel(Liu.HGates(;g=0.5, E = -20.0), FixedReversal(;E=-20.0); name = :H)
     Leak = build_channel(Liu.LeakGates(;g=0.1, E = -50.0), FixedReversal(;E=-50.0); name = :Leak)
 
-    fn = Liu.CalciumSensitiveNeuron(; C=1, name = :soma)
+    fn = Liu.CalciumSensitiveNeuron(; C=1, name = name)
 
     if input === nothing
         neur = build_neuron(fn;  channels = [KCa, Na, CaS, CaT, K, DRK, H, Leak])
@@ -117,19 +180,25 @@ function build_Liu(input=nothing; name=:soma)
     return(neur)
 end
 
-function put_synapse(pre, post, synapse_type::Symbol, weight::Float64; name=:syn, custom_synapse::Union{CustomSynapseParams, Nothing}=nothing)
-    synapse_type in SYNAPSE_TYPES || throw(ArgumentError("Invalid synapse type"))
-    if synapse_type == :Exc
-        @named syn_channel = Synapse.E_syn_gate_preset(;g=weight, name =name)
-    elseif synapse_type == :Inh
-        @named syn_channel = Synapse.I_syn_gate_preset(;g=weight, name =name)
-    elseif synapse_type == :Custom
-        if custom_synapse === nothing
-            throw(ArgumentError("If you want a custom synapse, you need to give a custom synapse, smartypants"))
-        end
-        @named syn_channel = custom_synapse(;g=weight, custom_synapse.E, custom_synapse.Vth, custom_synapse.k_, custom_synapse.sigma, name=name)
+function build_Prinz(input=nothing; name=:soma, config=PrinzConfig())
+
+    Na =   build_channel(Prinz.NaGates(;g=config.Na_g, E=config.Na_E), FixedReversal(;E=config.Na_E); name = :Na)
+    KCa =  build_channel(Prinz.KCaGates(;g=config.KCa_g, E=config.KCa_E), FixedReversal(;E=config.KCa_E); name = :KCa)
+    CaS =  build_channel(Prinz.CaSGates(;g=config.CaS_g), FixedReversal(;E=config.CaS_E); name = :CaS)
+    CaT =  build_channel(Prinz.CaTGates(;g=config.CaT_g), FixedReversal(;E=config.CaT_E); name = :CaT)
+    K =    build_channel(Prinz.KGates(;g=config.K_g, E=config.K_E), FixedReversal(;E=config.K_E); name = :K)
+    DRK =  build_channel(Prinz.DRKGates(;g=config.DRK_g, E=config.DRK_E), FixedReversal(;E=config.DRK_E); name = :KDR)
+    H  = build_channel(Prinz.HGates(;g=config.H_g, E=config.H_E), FixedReversal(;E=config.H_E); name = :H )
+    Leak = build_channel(Prinz.LeakGates(;g=config.Leak_g, E=config.Leak_E), FixedReversal(;E=config.Leak_E); name = :Leak)
+
+    fn = Prinz.CalciumSensitiveNeuron(; C=config.C, Ca=config.Ca0, V=config.V0, name = name)
+
+    if input === nothing
+        neur = build_neuron(fn;  channels = [KCa, Na, CaS, CaT, K, DRK, H, Leak])
+    else
+        neur = build_neuron(fn, input;  channels = [KCa, Na, CaS, CaT, K, DRK, H, Leak])
     end
-    return add_synapse(syn_channel, pre, post)
+    return(neur)
 end
 
 function parse_sol_for_voltage(state_vars)

@@ -2,26 +2,6 @@
 """
     Build channel from gates: put in series with voltage.
 """
-function build_channel_old(gate, Reversal)
-    return @mtkmodel Channel begin
-        @parameters begin
-            g = g, [description = "Channel conductance"]
-            E = E, [description = "Reversal Potential"]
-        end
-        @components begin
-            p = Pin()
-            n = Pin()
-            reversal = Reversal(;E = E)
-            conductance = gate(g=g, E=E)
-        end
-        @equations begin
-            connect(conductance.p, reversal.n)
-            connect(conductance.n, n)
-            connect(reversal.p, p)
-        end
-    end
-end
-
 function build_channel(conductance, reversal;name)
 
     @named p = Pin()
@@ -64,10 +44,10 @@ function build_neuron(neuron; channels)
      ] for channel in channels]
 
      input_connection = neuron.I.u ~ 0
-     calcium_connection = [[
-                        connect(channel.reversal.ca.p, neuron.ca.p),            
-                        connect(neuron.ca.n,  channel.reversal.ca.n)            
-                    ] for channel in channels if hasproperty(channel.reversal, :ca) ] 
+     #calcium_connection = [[
+     #                   connect(channel.reversal.ca.p, neuron.ca.p),            
+     #                   connect(neuron.ca.n,  channel.reversal.ca.n)            
+     #               ] for channel in channels if hasproperty(channel.reversal, :ca) ] 
 
     calcium_flux_connections = [[
             connect(channel.conductance.ca.p, neuron.ca.p),
@@ -79,7 +59,7 @@ function build_neuron(neuron; channels)
      return connected_system
 end
 
-function add_synapse_nu(channel, pre_neuron, post_neuron)
+function add_synapse_no_odesystem(channel, pre_neuron, post_neuron)
     pre_name = nameof(pre_neuron) 
     post_name = nameof(post_neuron)
     
@@ -94,6 +74,7 @@ end
 function add_synapse(channel, pre_neuron, post_neuron)
     pre_name = nameof(pre_neuron) 
     post_name = nameof(post_neuron)
+    println("Names", pre_name, "__", post_name)
     
     channel_connection = [
         connect(channel.pre, getproperty(pre_neuron, pre_name).p),

@@ -5,16 +5,11 @@ Pkg.develop(path = joinpath(@__DIR__, ".."))
 using ModelingToolkit
 using OrdinaryDiffEq
 using ModelingToolkitStandardLibrary.Blocks: Constant, TimeVaryingFunction 
-using MTKNeuralToolkit  # replace with your actual package name
+using MTKNeuralToolkit 
 import MTKNeuralToolkit.Liu as Liu
 #using script_utils.jl
 using Plots
 
-
-
-
-# leak = build_channel(Liu.LGates,FixedReversal)(;g=0.3,E=-65,name=:leak)
-# pot =  build_channel(Liu.KGates, FixedReversal)(;g=35,E=-77,name=:pot)
 Na =  build_channel(Liu.NaGates(;g=100, E = 50.0), FixedReversal(;E=50.0); name = :Na)
 KCa =  build_channel(Liu.KCaGates(;g=10.0, E = -80.0), FixedReversal(;E=-80.0); name = :KCa)
 CaS =  build_channel(Liu.CaSGates(;g=1.3), FixedReversal(;E=0.0); name = :CaS)

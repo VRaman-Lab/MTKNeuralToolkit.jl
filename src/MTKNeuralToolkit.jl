@@ -31,4 +31,10 @@ include("RMM/RMM.jl")
 
 export RMMVec, RMMScal, RMMVecf
 
+include("Prinz/Prinz.jl")
+
+include("Config/Config.jl")
+
+#export PrinzConfig
+
 end

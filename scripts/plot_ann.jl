@@ -32,6 +32,8 @@ println("________________")
 neur = build_neuron(fn, inp; channels = [rmm_channel, Na, K, Leak])
 neur_c = structural_simplify(neur) 
 
+
+
 prob = ODEProblem(neur_c, Pair[], (0.0, 200.0) )
 @time sol = solve(prob, Rodas5());
 @time sol = solve(prob, Rodas5());
@@ -40,3 +42,4 @@ p = plot(sol,idxs=[neur.Na.conductance.m_gate,neur.Na.conductance.h_gate], layou
 plot!(p, sol, idxs=[neur.K.conductance.n_gate], subplot=2)
 plot!(p, sol, idxs=[neur.RMM.conductance.lti_v_plotter], subplot=3)
 plot!(p, sol, idxs=[neur.soma.v], subplot=4)
+gui(p)
