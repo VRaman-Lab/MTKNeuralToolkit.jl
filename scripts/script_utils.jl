@@ -188,14 +188,14 @@ Placeholder for integrate-and-fire neuron implementation.
 """
 
 function build_IF(input=nothing; name = :soma)
-    IF = build_channel(IaF.IF_channel(; E=-65, name = :conductance), FixedReversal(; E=-65); name =:IF)
+    IF = build_channel(IaF.IF_channel(; E=0, name = :conductance), FixedReversal(; E=-65); name =:IF)
     fn = BasicSoma(; C=10, name = name)
     if input === nothing
         neur = build_neuron(fn; channels = [IF])
     else
         neur = build_neuron(fn, input; channels = [IF])
     end
-    return neur
+    return(neur)
 end
 
 """

@@ -68,20 +68,18 @@ end
     @extend v_pre, v_post, i_post = twoport = DirectionalTwoPort()
     @parameters begin
         g_max = 1.0 
-        E = -65.0 
-        τ_s = 10.0 
+        E = 0
+        τ_g = 5.0
         V_th = -55.0
-        A = 1.0
+        k = 1
     end
-    @variables begin
+    @variables begin 
         s(t) = 0.0
-    end
+        g(t) = 0.0 
+    end 
     @equations begin
-        D(s) ~ -s / τ_s
-        i_post ~ g_max * s * (v_post - E - 65)
-    end
-    @continuous_events begin
-        [v_pre ~ V_th] => [s ~ A]
+        τ_g * D(g) ~ -g + g_max / (1 + exp(-(v_pre - V_th)/k)) 
+        i_post ~ (g * (v_post - E))
     end
 end
 

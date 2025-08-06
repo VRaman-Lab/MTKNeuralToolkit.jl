@@ -17,11 +17,11 @@ import MTKNeuralToolkit
 using Plots
 include("script_utils.jl")
 
-@named inp = TimeVaryingFunction(f = t -> ifelse((t > 10) & (t < 20), 35.0, 0.0))
+@named inp = TimeVaryingFunction(f = t -> ifelse((t > 10) & (t < 40),50.0, 0.0))
 n1 = build_IF(inp; name = :n1)
 n2 = build_IF(; name =:n2)
 
-IF_synapse = Syn.LifSynapse(;g_max=1, name = :IF_synapse)
+IF_synapse = Syn.LifSynapse(;g_max=10, name = :IF_synapse)
 
 network = make_lif_synapse(n1, n2, IF_synapse; name = :system)
 simple_network = structural_simplify(network)
@@ -31,5 +31,3 @@ prob = ODEProblem(simple_network, Pair[], (0.0, 100.0))
 sol  = solve(prob, Rodas5());
 plot(sol, idxs=[IF_synapse.v_pre])
 plot!(sol, idxs=[IF_synapse.v_post])
-
-
