@@ -94,7 +94,7 @@ function build_network(connections::Dict, neurons::Dict, check_connections=true)
     validate_neuron_existence(connections, neurons)
     if check_connections validate_no_self_connections(connections) end
     network = create_network_from_connections(connections, neurons, [])
-    final_system = compose(ODESystem([], t; name=:network), network...)
+    final_system = compose(ODESystem([], t; name=:network), network)
     return structural_simplify(final_system)
 end
 
@@ -119,7 +119,7 @@ function build_network(connections::Dict, neurons::Vector, check_connections=tru
     neurons_dict = Dict("n$i" => neuron for (i, neuron) in enumerate(neurons))
     network = []
     network = create_network_from_connections(connections, neurons, neurons_dict)
-    final_system = compose(ODESystem([], t; name=:network), network...)
+    final_system = compose(ODESystem([], t; name=:network), network)
     return structural_simplify(final_system)
 end
 
