@@ -67,6 +67,16 @@ function build_neuron(neuron; channels)
      return connected_system
 end
 
+function build_ca_channel(conductance; name)
+    @named p = Pin()
+    @named n = Pin()
+    connections = [
+        connect(conductance.p, p)
+        connect(conductance.n, n)
+    ]
+    return compose(ODESystem(connections, t; name), [p, n, conductance])
+end
+
 function add_synapse_no_odesystem(channel, pre_neuron, post_neuron)
     pre_name = nameof(pre_neuron) 
     post_name = nameof(post_neuron)
@@ -94,19 +104,16 @@ function add_synapse(channel, pre_neuron, post_neuron)
     return connected_system
 end
 
-
 function make_lif_synapse(pre_neuron, post_neuron, synapse; name)
-    pre_name = nameof(pre_neuron) 
+    pre_name = nameof(pre_neuron)
     post_name = nameof(post_neuron)
-    println("Names:  ", pre_name, "__", post_name)
-    
     eqs = [
         connect(synapse.pre, getproperty(pre_neuron, pre_name).p)
         connect(synapse.post, getproperty(post_neuron, post_name).p)
     ]
-
     return compose(ODESystem(eqs, t; name), [pre_neuron, post_neuron, synapse])
 end
+
 function validate_no_self_connections(connections::Dict)
     for (source, target) in keys(connections)
         if source == target
@@ -114,6 +121,7 @@ function validate_no_self_connections(connections::Dict)
         end
     end
 end
+
 
 function validate_neuron_existence(connections::Dict, neurons)
     neuron_names = isa(neurons, Dict) ? keys(neurons) : ["n$i" for i in 1:length(neurons)]

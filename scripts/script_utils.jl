@@ -127,6 +127,7 @@ end
 Internal: Wire synapses between neurons based on connection specifications.
 """
 
+
 function create_network_from_connections(connections::Dict{Tuple{String, String}, @NamedTuple{type::Symbol, weight::Float64}}, neurons::Dict, network::Vector)
     for ((pre, post), (conn_params)) in connections
         x = put_synapse(neurons[pre], neurons[post], conn_params.type, conn_params.weight; name=Symbol("s_$(pre)$(post)"))
@@ -222,7 +223,7 @@ function build_HH(input=nothing; name=:soma, config=config.HHConfig())
 end
 
 """
-    build_Prinz(input=nothing; name=:soma, config=PrinzConfig())
+build_Prinz(input=nothing; name=:soma, config=PrinzConfig())
 
 Build a Prinz STG neuron model with calcium dynamics.
 Commonly used for central pattern generator networks.
@@ -250,7 +251,8 @@ function build_Liu(input=nothing; name=:soma, config=config.LiuConfig())
 end
 
 """
-Internal: Extract voltage states from system unknowns, handling duplicates.
+I
+ternal: Extract voltage states from system unknowns, handling duplicates.
 """
 
 function build_Prinz(input=nothing; name=:soma, config=config.PrinzConfig())
