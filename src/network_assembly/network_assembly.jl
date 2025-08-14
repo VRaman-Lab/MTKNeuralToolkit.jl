@@ -65,9 +65,7 @@ function build_network(connections::Dict{<:Tuple, Vector{@NamedTuple{type::Symbo
     
     network_components = vcat(collect(values(neurons)), synapses)
     final_system = compose(ODESystem([], t; name=:network), network_components)
-    #println("structural_simplifying")
-    ss = structural_simplify(final_system)
-    return ss
+    return structural_simplify(final_system)
 end
 
 function build_network(connections::Dict, neurons)

@@ -13,7 +13,16 @@ function build_channel(conductance, reversal;name)
     ]
     return compose(ODESystem(connections, t; name), [p,n,conductance,reversal])
 end
+<<<<<<< Updated upstream
 
+=======
+"""
+    build_ca_channel(conductance; name)
+
+Build a calcium channel with internal dynamic reversal potential.
+The channel must have an internal Nernst equation for reversal calculation.
+"""
+>>>>>>> Stashed changes
 function build_channel(conductance; name)
     @named p = Pin()
     @named n = Pin()
@@ -45,12 +54,19 @@ function build_neuron(neuron; channels)
     build_neuron(neuron, Constant(; name=:input, k=0.0); channels)
 end
 
+<<<<<<< Updated upstream
 function add_synapse(channel, pre_neuron, post_neuron; debug=false)
     pre_name = nameof(pre_neuron) 
     post_name = nameof(post_neuron)
     if debug
         println("Names:  ", pre_name, "__", post_name)
     end
+=======
+function add_synapse(channel, pre_neuron, post_neuron)
+    pre_name = nameof(pre_neuron) 
+    post_name = nameof(post_neuron)
+    
+>>>>>>> Stashed changes
     channel_connection = [
         connect(channel.pre, getproperty(pre_neuron, pre_name).p),
         connect(channel.post, getproperty(post_neuron, post_name).p),

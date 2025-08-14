@@ -12,7 +12,6 @@ end
     return -(sqrt(-lti))
 end=#
 
-
 function make_lti_vecs(τ; δ=0.01)
     # Handle both input formats - flatten if nested
     τ_flat = τ isa Vector{Vector{Float64}} ? vcat(τ...) : τ
