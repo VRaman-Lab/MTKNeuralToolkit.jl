@@ -16,6 +16,8 @@ function build_channel(conductance, reversal;name)
     return compose(ODESystem(connections, t; name), [p,n,conductance,reversal])
 end
 
+
+
 function build_channel(conductance; name)
     if conductance.p === nothing
         return build_channel_explicit(conductance;name)

@@ -19,6 +19,8 @@ include("MixedIonic/components.jl")
 export IonicPin, IonicPort, IonicTerminal, CalciumSensitiveNeuron, DirectionalTwoPort, BiDirectionalTwoPort
 
 include("HodgkinHuxley/HodgkinHuxley.jl")
+include("IntegrateAndFire/IntegrateAndFire.jl")
+export IF_channel
 include("Liu/Liu.jl")
 
 include("Synapse/Synapse.jl")
