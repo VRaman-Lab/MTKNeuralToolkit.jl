@@ -40,7 +40,7 @@ connections = Dict(
 println("Building network")
 @time network = build_network(connections, neurons)
 println("Building ODEProblem")
-@time prob = ODEProblem(network, Pair[], (0.0, 5000.0) )
+@time prob = ODEProblem(network, Pair[], (0.0, 300.0) )
 println("Equations: ", length(equations(network)))
 
 println("Solving")
