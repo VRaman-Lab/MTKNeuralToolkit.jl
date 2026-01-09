@@ -26,8 +26,13 @@ include("Synapse/Synapse.jl")
 
 include("Types/Types.jl")
 
-
 export SYNAPSE_TYPES
+
+include("Loss/loss.jl")
+
+export membrane_mse
+
+
 
 include("RMM/RMM.jl")
 

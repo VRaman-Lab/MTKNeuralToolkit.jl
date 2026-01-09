@@ -2,7 +2,7 @@
 
 julia_version = "1.11.7"
 manifest_format = "2.0"
-project_hash = "0ff7e220f6402bc9b0e7e25001c0c599ede281b9"
+project_hash = "c7f0cef4940ae4b147ec02b606edd5c8672fc1b7"
 
 [[deps.ADTypes]]
 git-tree-sha1 = "27cecae79e5cc9935255f90c53bb831cc3c870d7"
@@ -1592,7 +1592,7 @@ uuid = "d8e11817-5142-5d16-987a-aa16d5891078"
 version = "0.4.17"
 
 [[deps.MTKNeuralToolkit]]
-deps = ["Distributions", "FiniteDiff", "Lux", "ModelingToolkit", "ModelingToolkitNeuralNets", "ModelingToolkitStandardLibrary", "Optim", "OrdinaryDiffEq", "OrdinaryDiffEqNonlinearSolve", "Pkg", "Random", "SciMLSensitivity", "SciMLStructures", "Tracy"]
+deps = ["Distributions", "FiniteDiff", "ForwardDiff", "Lux", "ModelingToolkit", "ModelingToolkitNeuralNets", "ModelingToolkitStandardLibrary", "Optim", "OrdinaryDiffEq", "OrdinaryDiffEqNonlinearSolve", "Pkg", "Random", "SciMLSensitivity", "SciMLStructures", "SymbolicIndexingInterface", "Tracy"]
 path = "/Users/ellabennison/Documents/GitHub/MTKNeuralToolkit/scripts/.."
 uuid = "88376828-b154-4662-bcd7-a3562b4741f6"
 version = "0.0.1-DEV"
@@ -2818,9 +2818,9 @@ version = "7.7.0+0"
 
 [[deps.SymbolicIndexingInterface]]
 deps = ["Accessors", "ArrayInterface", "RuntimeGeneratedFunctions", "StaticArraysCore"]
-git-tree-sha1 = "617400a198bd433f921ca2a4e89999f835dd3fde"
+git-tree-sha1 = "94c58884e013efff548002e8dc2fdd1cb74dfce5"
 uuid = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
-version = "0.3.45"
+version = "0.3.46"
 
     [deps.SymbolicIndexingInterface.extensions]
     SymbolicIndexingInterfacePrettyTablesExt = "PrettyTables"

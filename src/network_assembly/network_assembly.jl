@@ -89,7 +89,7 @@ function put_synapse(pre, post, synapse_type::Symbol, weight::Float64; name=:Cus
 end
 
 function build_IF(input=nothing; name=:IF)
-    IF = build_channel(IF_module.IF_channel(; E=0, name = :conductance), FixedReversal(; E=-65); name =:IF)
+    IF = build_channel(IF_module.IF_channel(; name = :conductance), FixedReversal(; E=-65); name =:IF)
     fn = BasicSoma(; C=10, name = :soma)
 
     if input === nothing

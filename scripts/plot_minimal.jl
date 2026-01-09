@@ -9,7 +9,7 @@ using MTKNeuralToolkit
 import MTKNeuralToolkit
 using Plots
 @named inp = TimeVaryingFunction(f=t -> (exp(sin(t))))
-neurons = [build_LIF(inp;name=:LIF), build_HH(; name=:HH)]
+neurons = [build_LIF(inp;name=:IF), build_HH(; name=:HH)]
 
 network = build_synapse(neurons[1], neurons[2], :Exc, 3.0; name=:minimal_network)
 

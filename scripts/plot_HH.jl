@@ -9,6 +9,8 @@ using MTKNeuralToolkit
 import MTKNeuralToolkit.HodgkinHuxley as HH
 import MTKNeuralToolkit
 using Plots
+using ForwardDiff
+using SymbolicIndexingInterface
 
 Na =    build_channel(HH.NaGates(;g=40, E = 55), FixedReversal(;E=55); name = :Na)      
 K =     build_channel(HH.KGates( ;g=35, E = -77), FixedReversal(;E=-77); name = :K)
@@ -21,10 +23,18 @@ fn = BasicSoma(; C=1, name = :soma)
 neur = build_neuron(fn, inp; channels = [Na, K, Leak])
 test = structural_simplify(neur) 
 
-prob = ODEProblem(test, Pair[], (0.0, 200.0) )
+prob = ODEProblem(test, Pair[], (0.0, 200.0))
 sol = solve(prob, Tsit5());
+
+setter! = setp(test, [test.soma.C])
+function loss(p)
+    setter!(prob, p)
+    sol = solve(prob, Tsit5())
+    
+end
 
 
 p = plot(sol,idxs=[neur.Na.conductance.m_gate,neur.Na.conductance.h_gate], layout=(4,1), subplot=1)
 plot!(p, sol, idxs=[neur.K.conductance.n_gate], subplot=2)
 plot!(p, sol, idxs=[neur.soma.V], subplot=3)
+

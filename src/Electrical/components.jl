@@ -23,10 +23,11 @@ end
         R
         V_reset = -70
         V_th = -55
-        tau = 1
+        a = 1.0
     end
     @variables begin
         V(t) = -65, [description = "membrane voltage"]
+        Spike_count(t) = 0
     end
     @components begin
         oneport = OnePort()
@@ -37,9 +38,11 @@ end
         D(oneport.v) ~ (oneport.i + I.u)/ C
         connect(ground.g, oneport.n)
         V ~ oneport.v
+        D(Spike_count) ~ 0
     end
     @continuous_events begin
-        [oneport.v ~ V_th] => (affect = [oneport.v ~ Pre(V_reset)])
+        [oneport.v ~ V_th] => (affect = [oneport.v ~ Pre(V_reset), Spike_count ~ Pre(Spike_count) + 1])
+        
     end
 end
 """

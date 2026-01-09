@@ -40,24 +40,10 @@ GlutamatergicSynapse(; g, E=-70.0, Vth=-35.0, k_=0.025, sigma=5.0, name=:glutama
     end 
     @equations begin
         τ_g * D(g) ~ -g + g_max / (1 + exp(-(v_pre - V_th)/k)) 
-        i_post ~ (g * (v_post - E))
+        i_post ~ (g * (v_post))
     end
 end
 
-@mtkmodel LifSynapseStep begin 
-    @extend v_pre, v_post, i_post = twoport = DirectionalTwoPort() 
-    @parameters begin
-        w
-        V_th = -55.0 
-    end
-    @equations begin
-        i_post ~ 0.0
-    end
-    @continuous_events begin
-        [(-(v_pre - V_th)) ~ 0.1] => [v_post ~ Pre(v_post)+w]
-    end
-
-end
 
 E_syn_gate_preset(; g, E=0.0, Vth=-35.0, k_=0.025, sigma=5.0, name=:E_syn) = 
     BaseSynapse(; g=g, E=E, Vth=Vth, k_=k_, sigma=sigma, name=name)
