@@ -1,3 +1,5 @@
+using ChainRulesCore
+
 @mtkmodel BasicSoma begin
     @parameters begin
         C, [description = "Capacitance"]
@@ -21,6 +23,36 @@ end
 Leaky Integrate-And-Fire soma where resetting dynamics are used 
 This solves the Mass Matrix problem 
 "
+
+reset_function(V_reset, V_th, v) = v - (V_th - V_reset)  
+@register_symbolic reset_function(V_reset, V_th, v)
+
+σ(V_th, v; k=10.0) = 1 / (1 + exp(-k*(v-V_th)))
+@register_symbolic σ(V_th, v)
+σ′(V_th, v; k=10.0) = k * σ(V_th, v; k=k) * (1 - σ(V_th, v; k=k))
+@register_symbolic σ′(V_th, v)
+
+function ChainRulesCore.frule(::typeof(reset_function), V_reset, V_th, v)
+    Y = reset_function(V_reset, V_th, v)
+        function pullback(ȳ)
+            print("hello")
+            @info "rrule pullback called" ȳ V_th v σ′(V_th,v)  
+            return NoTangent(), ȳ * (-1.0), ȳ * σ′(V_th, v), ȳ * 1.0
+        end 
+        return Y, pullback
+
+end
+
+
+function ChainRulesCore.rrule(::typeof(reset_function), V_reset, V_th, v)
+    Y = reset_function(V_reset, V_th, v)
+    function pullback(ȳ)
+        print("hello")
+        @info "rrule pullback called" ȳ V_th v σ′(V_th,v)  
+        return NoTangent(), ȳ * (-1.0), ȳ * σ′(V_th, v), ȳ * 1.0
+    end 
+    return Y, pullback
+end 
 
 @mtkmodel LIFSoma begin
     @parameters begin
@@ -46,10 +78,10 @@ This solves the Mass Matrix problem
         D(Spike_count) ~ 0
     end
     @continuous_events begin
-        [oneport.v ~ V_th] => (affect = [oneport.v ~ Pre(V_reset), Spike_count ~ Pre(Spike_count) + 1])
-        
+        [oneport.v ~ V_th] => (affect = [oneport.v ~ reset_function(V_reset, V_th, Pre(oneport.v)), Spike_count ~ Pre(Spike_count) + 1]) 
     end
-end
+end 
+
 """
 A battery: generates a constant potential difference across its terminals
 """

@@ -29,8 +29,8 @@ prob = ODEProblem(neur, Pair[], (0.0, 40.0))
 
 sol = solve(prob, Tsit5())
 
-p = plot(sol, idxs=[neur.soma.oneport.v],label="LIF neuron", ylabel="Voltage(V)", xlabel="Time(ms)",layout=(3,1), subplot =1)
+p = plot(sol, idxs=[neur.soma.oneport.v],label="LIF neuron", ylabel="Voltage(V)", xlabel="Time(ms)",layout=(2,1), subplot =1)
 t_vec = 0:0.1:40  # Time vector
-input_current = [ifelse((t > 10) & (t < 20), 100.0, 0.0) for t in t_vec]
+input_current = [ifelse((t > 10) & (t < 20), 20.0, 0.0) for t in t_vec]
 plot!(t_vec, input_current, label="Input Current", xlabel="Time(ms)", ylabel="Current(A)", subplot=2)
-plot!(sol, idxs=[neur.soma.Spike_count],label="LIF neuron", ylabel="Number of spikes", xlabel="Time(ms)", subplot =3)
+#plot!(sol, idxs=[neur.soma.Spike_count],label="LIF neuron", ylabel="Number of spikes", xlabel="Time(ms)", subplot =3)

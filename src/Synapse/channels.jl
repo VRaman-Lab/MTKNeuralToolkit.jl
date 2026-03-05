@@ -27,13 +27,13 @@ GlutamatergicSynapse(; g, E=-70.0, Vth=-35.0, k_=0.025, sigma=5.0, name=:glutama
     BaseSynapse(; g=g, E=E, Vth=Vth, k_=k_, sigma=sigma, name=name)
 
 "
-LIF synapse: Allows current to be injected from pro-synapse to post-synapse
+LIF synapse: Allows current to be injected from pre-synapse to post-synapse
 "
 @mtkmodel LifSynapseComplex begin
     @extend v_pre, v_post, i_post = twoport = DirectionalTwoPort()
     @parameters begin
         g_max = 1.0 
-        E = 0
+        E = 0.0
         τ_g = 5.0
         V_th = -55.0
         k = 1
