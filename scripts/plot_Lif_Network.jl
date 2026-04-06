@@ -28,22 +28,22 @@ neurons = [
    
 ]
 connections = Dict(
-    (1, 2) => [(type=:LIF, weight = 5.0)],
-    (2, 3) => [(type =:LIF, weight = 2.0)],
-    (3, 4) => [(type =:LIF, weight = 2.0)],
+    (1, 2) => [(type=:LIF, weight = 3.0)],
+    (2, 3) => [(type =:LIF, weight = 3.0)],
+    (3, 4) => [(type =:LIF, weight = 3.0)],
 )
 
 
 sys = build_network(connections, neurons)
 
 
-build_start = time()
-@time prob = ODEProblem(sys, Pair[], (0.0, 100.0))
-build_end = time() 
 
-solve_start = time()
-@time sol = solve(prob, Tsit5());
-solve_end = time()
+prob = ODEProblem(sys, Pair[], (0.0, 200.0))
+
+cb, spike_times = make_spike_callback(prob, neurons)
+
+sol = solve(prob, Tsit5(); callback=cb);
+
 
 outputs_neurons = ["IF1", "IF2"]
 

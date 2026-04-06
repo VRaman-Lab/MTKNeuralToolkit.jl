@@ -14,7 +14,7 @@ export build_channel, build_channel_explicit, build_neuron, add_synapse, make_li
 
 include("Electrical/components.jl")
 
-export NaGates, KGates, LGates, BasicSoma, LIFSoma, reset_function, rrule, frule, σ, σ′, FixedReversal, fixed_reversal
+export NaGates, KGates, LGates, BasicSoma, LIFSoma, reset_function, rrule, frule, make_spike_callback, FixedReversal, fixed_reversal
 
 include("MixedIonic/components.jl")
 export IonicPin, IonicPort, IonicTerminal, CalciumSensitiveNeuron, DirectionalTwoPort, BiDirectionalTwoPort

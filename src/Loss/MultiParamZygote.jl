@@ -2,10 +2,16 @@
 "
 This is all test code and is in the works (Ella dissertation)
 "
+safe_std(x) = length(x) > 1 && any(xi != x[1] for xi in x) ? std(x) : 0.0
 
 function MulitParamZygote_test(system, ref_sol, prob, neurons, params, opt, epoch)
-    ground_sol = generate_groundtruth_system(ref_sol)
+    ground_sol, Spike_count = generate_groundtruth_system(ref_sol, [4.0, 4.0, 4.0])
     tsteps = unique(ground_sol.t)
+
+    for (i, n) in enumerate(neurons)
+        println("Ground $(nameof(n)) spikes: ", length(Spike_count[i]))
+    end
+
     p_array, params_idx, state_idx = get_parameters(prob, system, params, neurons)
     loss_arr = []
 
@@ -28,7 +34,7 @@ function MulitParamZygote_test(system, ref_sol, prob, neurons, params, opt, epoc
 
     optprob = OptimizationProblem(
         optfn, p0,
-        (prob, tsteps, truth_vec, params_idx, state_idx, loss_arr),
+        (prob, tsteps, truth_vec, params_idx, state_idx, loss_arr, neurons), 
     )
     if opt == "ADAM"
         sol = solve(optprob, ADAM(0.001); maxiters=epoch)
@@ -37,8 +43,8 @@ function MulitParamZygote_test(system, ref_sol, prob, neurons, params, opt, epoc
 end
 
 function loss(x, p)
-    prob, tsteps, truth_vec, param_idx, state_idx, loss_arr = p
-    loss_val = lif_loss(prob, x, tsteps, param_idx, state_idx, truth_vec)
+    prob, tsteps, truth_vec, param_idx, state_idx, loss_arr, neurons = p
+    loss_val = lif_loss(prob, x, tsteps, param_idx, state_idx, truth_vec, neurons)
     println("Loss: ", loss_val, " ", x)
 
     Zygote.ignore() do
@@ -48,50 +54,53 @@ function loss(x, p)
 end
 
 
-function lif_loss(prob, p_flat, tsteps, param_idx, state_idx, truth_vec)
+function lif_loss(prob, p_flat, tsteps, param_idx, state_idx, truth_vec, neurons)
     p_tunable, replace_p, _ = canonicalize(Tunable(), prob.p)
     p_new = [i in param_idx ? p_flat[findfirst(==(i), param_idx)] : p_tunable[i]
              for i in eachindex(p_tunable)]
     newprob = remake(prob; p = replace_p(p_new))
-    sol = solve(newprob, Tsit5(); 
-                saveat = tsteps,
-                dtmax = minimum(diff(tsteps)),
-                verbose = false)
-    
+
+    sol, spike_times = forward_callback(newprob, neurons, tsteps)
+
     total_loss = 0.0
     for (i, neuron_state_i) in enumerate(state_idx)
-        pred = [sol(t)[neuron_state_i] for t in tsteps]
+        pred  = [sol(t)[neuron_state_i] for t in tsteps]
+        truth = truth_vec[i]
 
-        total_loss += abs2(mean(pred) - mean(truth_vec[i]))
-        total_loss += 0.1 * abs2(std(pred) - std(truth_vec[i]))
+        mean_loss = abs2(mean(pred) - mean(truth))
+        std_loss  = abs2(safe_std(pred) - safe_std(truth))
+
+        total_loss += mean_loss
+        total_loss += 0.1 * std_loss 
     end
     return total_loss
 end
 
 
-function generate_groundtruth_system(ref_sol)
-    @named inp = TimeVaryingFunction(f = t -> ifelse((t > 10) & (t < 20),10, 0.0))
+function generate_groundtruth_system(ref_sol, target_weights)
+    @named inp = TimeVaryingFunction(f = t -> ifelse((t > 10) & (t < 20), 10, 0.0))
     neurons = [
-    build_LIF(inp;name=:IF1),
-    build_LIF(;name=:IF2),
-    build_LIF(;name=:IF3),
-    build_LIF(;name=:IF4)
+        build_LIF(inp; name=:IF1),
+        build_LIF(; name=:IF2),
+        build_LIF(; name=:IF3),
+        build_LIF(; name=:IF4)
     ]
     connections = Dict(
-        (1, 2) => [(type=:LIF, weight = 5.0)],
-        (2, 3) => [(type =:LIF, weight = 2.0)],
-        (3, 4) => [(type =:LIF, weight = 2.0)],
+        (1, 2) => [(type=:LIF, weight=target_weights[1])],
+        (2, 3) => [(type=:LIF, weight=target_weights[2])],
+        (3, 4) => [(type=:LIF, weight=target_weights[3])],
     )
 
-
-
-    ground_sys = build_network(connections, neurons)
-
+    ground_sys  = build_network(connections, neurons)
     ground_prob = ODEProblem(ground_sys, Pair[], (0.0, 200.0))
+    cb, spike_counts = make_spike_callback(ground_prob, neurons)
+    ground_sol = solve(ground_prob, Tsit5(); callback=cb)
 
-    ground_sol = solve(ground_prob, Tsit5(); saveat=ref_sol.t);
+    for (i, n) in enumerate(neurons)
+        println("Ground $(nameof(n)) spikes: $(length(spike_counts[i]))")
+    end
 
-    return ground_sol
+    return ground_sol, spike_counts
 end
 
 function get_parameters(prob, system, params, neurons)
@@ -133,10 +142,20 @@ function get_neuron_states(prob, system, neurons)
     return final_arr, neuron_dict
 end
 
+function forward_callback(prob, neurons, tsteps)
+    cb, spike_times = make_spike_callback(prob, neurons)
+    sol = solve(prob, Tsit5(); 
+                callback = cb,
+                saveat = tsteps,
+                dtmax = minimum(diff(tsteps)),
+                verbose = false)
+    return sol, spike_times
+end
 
 
-function ChainRulesCore.rrule(::typeof(lif_loss), prob, p_flat, tsteps, param_idx, state_idx, truth)
-    loss_val = lif_loss(prob, p_flat, tsteps, param_idx, state_idx, truth)
+
+function ChainRulesCore.rrule(::typeof(lif_loss), prob, p_flat, tsteps, param_idx, state_idx, truth, neurons)
+    loss_val = lif_loss(prob, p_flat, tsteps, param_idx, state_idx, truth, neurons)
     
     _prob = prob
     _tsteps = tsteps
@@ -144,6 +163,7 @@ function ChainRulesCore.rrule(::typeof(lif_loss), prob, p_flat, tsteps, param_id
     _state_idx = state_idx
     _p_flat = copy(p_flat)
     _truth = truth
+    _neurons = neurons
 
     function lif_loss_pullback(Δ)
     δ = unthunk(Δ)
@@ -152,8 +172,8 @@ function ChainRulesCore.rrule(::typeof(lif_loss), prob, p_flat, tsteps, param_id
     for i in eachindex(_p_flat)
         p_plus  = copy(_p_flat); p_plus[i]  += ε
         p_minus = copy(_p_flat); p_minus[i] -= ε
-        loss_plus  = lif_loss(_prob, p_plus,  _tsteps, _param_idx, _state_idx, _truth)
-        loss_minus = lif_loss(_prob, p_minus, _tsteps, _param_idx, _state_idx, _truth)
+        loss_plus  = lif_loss(_prob, p_plus,  _tsteps, _param_idx, _state_idx, _truth, _neurons)
+        loss_minus = lif_loss(_prob, p_minus, _tsteps, _param_idx, _state_idx, _truth, _neurons)
         ∂p[i] = δ * (loss_plus - loss_minus) / (2ε)
     end
     
