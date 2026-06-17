@@ -3,7 +3,7 @@ module MTKNeuralToolkit
 using ModelingToolkit
 import ModelingToolkitStandardLibrary.Blocks: RealInput
 import ModelingToolkitStandardLibrary.Electrical: Ground, OnePort, TwoPort, Pin
-using ModelingToolkit: t_nounits as t, D_nounits as D, connect 
+using ModelingToolkit: t_nounits as t, D_nounits as D, connect, SymbolicT
 using ModelingToolkit: mtkcompile, Pre
 using OrdinaryDiffEq
 using DynamicQuantities
@@ -16,10 +16,10 @@ using DynamicQuantities
 include("BasicComponents.jl")
 export Ground, OnePort, Pin, Capacitor, LIFCapacitor, CurrentSource, FixedReversal 
 
-# include("Electrical/utils.jl")
 include("connections.jl")
 export build_channel, build_neuron, connect_synapse, build_compartment
 export build_synapse, EventSynapseGate
+export neuron_connect, build_network
 
 # include("BasicComponents.jl")
 

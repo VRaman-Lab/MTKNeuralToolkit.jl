@@ -4,31 +4,38 @@ Soma Component: Represents a pure physical lipid bilayer membrane patch.
 @component function Capacitor(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
-    params = @parameters C = C
-    vars = @variables V(t) = -65.0
+    @parameters begin
+        C = C
+    end
+    params = SymbolicT[]
+    push!(params, C)
     
-    eqs = [
-        D(v) ~ i / C
-        V ~ v
-    ]
-    extend(System(eqs, t, vars, [C]; name), oneport)
+    @variables begin
+        V(t)
+    end
+    vars = SymbolicT[]
+    push!(vars, V)
+    
+    initial_conditions = Dict{SymbolicT, SymbolicT}()
+    initial_conditions[V] = -65.0
+    guesses = Dict{SymbolicT, SymbolicT}()
+    
+    eqs = Equation[]
+    push!(eqs, D(v) ~ i / C)
+    push!(eqs, V ~ v)
+    
+    cap_sys = System(
+        eqs, 
+        t, 
+        vars, 
+        params; 
+        systems = System[], 
+        initial_conditions, 
+        guesses, 
+        name
+    )
+    return extend(cap_sys, oneport)
 end
-
-# """
-# CurrentSource Component: Converts a causal RealInput signal (u) 
-# into an acausal electrical current (i) injecting into a physical Node.
-# """
-# @component function CurrentSource(; name)
-#     @named oneport = OnePort()
-#     @unpack i = oneport
-#     @named I = RealInput()
-    
-#     eqs = [
-#         i ~ -I.u 
-#     ]
-#     extend(System(eqs, t, [], []; name, systems = [I]), oneport)
-# end
-
 
 """
 CurrentSource Component: Converts a causal RealInput signal (u) 
@@ -39,12 +46,28 @@ into an acausal electrical current (i) injecting into a physical Node.
     @unpack i = oneport
     @named I = RealInput()
     
-    eqs = [
-        i ~ -I.u 
-    ]
-    extend(System(eqs, t, [], []; name, systems = [I]), oneport)
+    vars = SymbolicT[]
+    params = SymbolicT[]
+    eqs = Equation[]
+    push!(eqs, i ~ -I.u)
+    initial_conditions = Dict{SymbolicT, SymbolicT}()
+    guesses = Dict{SymbolicT, SymbolicT}()
+    # We cast 'I' into a Vector{System} instead of leaving it as an untyped literal array
+    subsystems = System[]
+    push!(subsystems, I)
+    
+    source_sys = System(
+        eqs, 
+        t, 
+        vars, 
+        params; 
+        systems = subsystems, 
+        initial_conditions, 
+        guesses, 
+        name
+    )
+    return extend(source_sys, oneport)
 end
-
 
 """
 fixed_reversal Component: A pure constant voltage source (Nernst battery).
@@ -52,11 +75,29 @@ fixed_reversal Component: A pure constant voltage source (Nernst battery).
 @component function FixedReversal(; name, E = 0.0)
     @named oneport = OnePort()
     @unpack v = oneport
-    params = @parameters E = E
-    eqs = [v ~ E]
-    extend(System(eqs, t, [], [E]; name), oneport)
+    @parameters begin
+        E = E
+    end
+    params = SymbolicT[]
+    push!(params, E)
+    vars = SymbolicT[]
+    eqs = Equation[]
+    push!(eqs, v ~ E)
+    
+    initial_conditions = Dict{SymbolicT, SymbolicT}()
+    guesses = Dict{SymbolicT, SymbolicT}()
+    reversal_sys = System(
+        eqs, 
+        t, 
+        vars, 
+        params; 
+        systems = System[], 
+        initial_conditions, 
+        guesses, 
+        name
+    )
+    return extend(reversal_sys, oneport)
 end
-
 
 """
 LIFCapacitor Component: Capacitor that automatically resets its voltage when a threshold is crossed 
@@ -65,26 +106,51 @@ LIFCapacitor Component: Capacitor that automatically resets its voltage when a t
     @named oneport = OnePort()
     @unpack v, i = oneport
     
-    params = @parameters(
-        C = C,
-        V_th = V_th,
+    @parameters begin
+        C = C
+        V_th = V_th
         V_reset = V_reset
-    )
-    vars = @variables V(t) = -65.0
+    end
+    params = SymbolicT[]
+    push!(params, C)
+    push!(params, V_th)
+    push!(params, V_reset)
     
-    eqs = [
-        D(v) ~ i / C
-        V ~ v
-    ]
+    @variables begin
+        V(t)
+    end
+    vars = SymbolicT[]
+    push!(vars, V)
     
-    root_eqs = [v ~ V_th] 
-    # Affect: The state after the callback becomes V_reset
-    affect   = [v ~ V_reset] 
+    initial_conditions = Dict{SymbolicT, SymbolicT}()
+    initial_conditions[V] = -65.0
+    guesses = Dict{SymbolicT, SymbolicT}()
     
-    # Combine via Pair mapping: conditions => affects
+    eqs = Equation[]
+    push!(eqs, D(v) ~ i / C)
+    push!(eqs, V ~ v)
+    
+    # continuous_events expects a Vector{Equation} => Vector{Equation} pair (or arrays of pairs)
+    # Using push! ensures the condition and affect equations are cleanly typed
+    root_eqs = Equation[]
+    push!(root_eqs, v ~ V_th)
+    
+    affect = Equation[]
+    push!(affect, v ~ V_reset)
+    
     events = root_eqs => affect
     
-    base_sys = System(eqs, t, vars, [C, V_th, V_reset]; name, continuous_events = events)
-    return extend(base_sys, oneport)
+    lif_sys = System(
+        eqs, 
+        t, 
+        vars, 
+        params; 
+        systems = System[], 
+        initial_conditions, 
+        guesses, 
+        continuous_events = events,
+        name
+    )
+    
+    return extend(lif_sys, oneport)
 end
-
