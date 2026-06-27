@@ -304,7 +304,7 @@ end
 """
 Soma Component: Represents a pure physical lipid bilayer membrane patch.
 """
-@component function Capacitor(; name, C = 1.0, V_init = -65.0)
+@component function Capacitor(; name, C = 1.0)
     @named oneport = OnePort()
     @unpack v, i = oneport
     @parameters begin
@@ -313,15 +313,10 @@ Soma Component: Represents a pure physical lipid bilayer membrane patch.
     params = SymbolicT[]
     push!(params, C)
     
-    @variables begin
-        V(t) = V_init
-    end
     vars = SymbolicT[]
-    push!(vars, V)
     
     eqs = Equation[]
     push!(eqs, D(v) ~ i / C)
-    push!(eqs, V ~ v)
     
     cap_sys = System(
         eqs, 
@@ -579,6 +574,11 @@ end
 
 ## File: src/connections.jl
 ````julia
+using Symbolics: fixpoint_sub, SymbolicT
+using ModelingToolkit: unknowns, parameters, equations, @named, System, t_nounits as t, isparameter, is_derivative, getname, full_equations, continuous_events, observed, inputs
+using ModelingToolkitStandardLibrary.Blocks: RealInput
+
+ 
 """
 build_compartment: Constructs a single neural compartment (soma/dendrite).
 If `stimulus_block` is provided, it drives the internal current injector.
@@ -866,7 +866,7 @@ struct Compartment
     interfaces::NamedTuple
 end
 
-function build_floating_compartment(capacitor, channels; name=:compartment)
+function build_floating_compartment(capacitor, channels; name=:compartment, V_init=-65.0)
     @named injector = CurrentSource()
     @named axial_injector = CurrentSource() 
     @named ground = Ground()
@@ -893,7 +893,7 @@ function build_floating_compartment(capacitor, channels; name=:compartment)
     push!(eqs, V ~ capacitor.v)
     
     sys = System(eqs, t, vars, SymbolicT[]; systems = all_systems, name)
-    return Compartment(sys, (V=V, I_axial=axial_injector.I.u, I_ext=injector.I.u))
+    return Compartment(sys, (V=V, cap_name=nameof(capacitor), V_init=V_init, I_axial=axial_injector.I.u, I_ext=injector.I.u))
 end
 
 
@@ -926,6 +926,7 @@ function build_cell(compartments::Vector{Compartment}, axial_connections; driver
         push!(eqs, I_ax_pre ~ -I_flow)
         push!(eqs, I_ax_post ~ I_flow)
     end
+
     
     for (target, stim) in drivers
         idx = target isa Int ? target : findfirst(==(target), compartments)
@@ -966,184 +967,192 @@ struct Network
     inputs::Vector{Any}
 end
 
+"""
+    build_network(cell::Cell, N::Int; synapse_connections=[], ground_inputs=true, name=:network)
+
+Pre-compile a cell once, then clone its simplified equations N times into a flat
+network. This avoids re-running MTK's structural simplification on N identical cells,
+trading hierarchical structure for compile-time speed on large homogeneous networks.
+
+# Arguments
+- `cell::Cell`: A cell built via `build_cell` with `ground_undriven=false`.
+
+# Keywords
+- `synapse_connections::Vector{Tuple}`: Each tuple is `(pre_cell, pre_comp, post_cell, post_comp, generator)`
+  where `generator` is a function `(; name) -> System` producing a synapse with `V_pre`, `V_post`,
+  `I_syn`, `s`, `E_rev`, and `g_max` variables/parameters.
+- `ground_inputs::Bool`: If true, unconnected injector inputs are grounded to 0.0.
+- `name::Symbol`: Network system name.
+
+# Returns
+- `Network`: The uncompiled flat system, a `nodes` DataFrame, and exposed inputs.
+"""
 function build_network(cell::Cell, N::Int; synapse_connections=[], ground_inputs=true, name=:network)
+    # 1. Pre-compile the cell once — structural simplification runs here, not N times
+    compiled_cell = mtkcompile(cell.sys, inputs=cell.inputs)
+
     all_eqs = Equation[]
-    all_vars_set = Set{SymbolicT}()
-    all_params_set = Set{SymbolicT}()
+    all_vars = SymbolicT[]
+    all_params = SymbolicT[]
     all_defaults = Dict{Any, Any}()
     all_systems = System[]
     all_events = []
-    all_inputs = SymbolicT[]
-    
-    # Compile the cell with its specific external inputs
-    compiled_cell = mtkcompile(cell.sys, inputs=cell.inputs)
     nodes = DataFrame(cell_idx=Int[], comp_idx=Int[], V=Any[], I_ext=Any[])
-    
-    # Updated to prefix parameters to avoid name clashes
-    function make_new_name(sym, n_idx, is_param=false)
+
+    # Helper: create a renamed clone of a compiled symbolic variable
+    function clone_sym(sym, n_idx, is_param)
         sym_str = Base.replace(string(sym), "(t)" => "")
         flat_name = Base.replace(sym_str, "₊" => "_")
         prefix = is_param ? :p_ : :n_
-        return Symbol(prefix, n_idx, :_, flat_name)
+        new_name = Symbol(prefix, n_idx, :_, flat_name)
+        return is_param ? only(@parameters $new_name) : only(@variables $new_name(t))
     end
 
-    # Simple 1-level resolver for voltage aliases
-    function resolve_v_var(compiled_sys, var)
-        var_str = string(var)
-        for u in unknowns(compiled_sys)
-            if endswith(string(u), var_str)
-                return u
-            end
-        end
-        for eq in observed(compiled_sys)
-            if eq isa Equation && endswith(string(eq.lhs), var_str)
-                rhs_str = string(eq.rhs)
-                for u in unknowns(compiled_sys)
-                    if endswith(string(u), rhs_str)
-                        return u
-                    end
-                end
-            end
-        end
-        return nothing
-    end
+    # Pre-compute lookup strings (avoid rebuilding inside the N-loop)
+    compiled_inputs = ModelingToolkit.inputs(compiled_cell)
+    input_strs = [Base.replace(string(inp), "(t)" => "") for inp in compiled_inputs]
 
-        println("\n--- DEBUG: Network Input Matching ---")
-    println("Inputs in compiled_cell: ", ModelingToolkit.inputs(compiled_cell))
+    comp_lookup = Dict{Int, NamedTuple}()
     for (c_idx, comp) in enumerate(cell.compartments)
-        println("Searching for I_ext in comp $c_idx: '", string(comp.interfaces.I_ext), "'")
+        comp_name = string(nameof(comp.sys))
+        comp_lookup[c_idx] = (
+            I_ext_str = "$(comp_name)₊injector₊I₊u(t)",
+        )
     end
-    println("--------------------------------------\n")
 
+    # 2. Clone the compiled cell N times
     for n_idx in 1:N
         local_sub = Dict{Any, Any}()
-        
-        # Clone unknowns (this includes inputs)
+
+        # Clone unknowns
         for u in unknowns(compiled_cell)
-            new_name = make_new_name(u, n_idx, false)
-            new_v = only(@variables $new_name(t))
+            new_v = clone_sym(u, n_idx, false)
             local_sub[u] = new_v
-            push!(all_vars_set, new_v)
+            push!(all_vars, new_v)
         end
 
-        # Get string representations of all inputs to identify them
-        input_strs = [Base.replace(string(inp), "(t)" => "") for inp in ModelingToolkit.inputs(compiled_cell)]
-        
-        # Clone parameters (with 'p_' prefix to avoid clashes)
+        # Clone inputs as unknowns (they need to be driven by network equations)
+        for inp in compiled_inputs
+            haskey(local_sub, inp) && continue  # Already cloned as unknown
+            new_v = clone_sym(inp, n_idx, false)
+            local_sub[inp] = new_v
+            push!(all_vars, new_v)
+        end
+
+        # Clone parameters (skip inputs — strip (t) from both sides for matching)
         for p in parameters(compiled_cell)
-            p_str = string(p)
-            if any(endswith.(p_str, input_strs))
-                continue
-            end
-            
-            new_name = make_new_name(p, n_idx, true)
-            new_p = only(@parameters $new_name)
+            p_str_clean = Base.replace(string(p), "(t)" => "")
+            any(endswith.(p_str_clean, input_strs)) && continue
+            new_p = clone_sym(p, n_idx, true)
             local_sub[p] = new_p
-            push!(all_params_set, new_p)
+            push!(all_params, new_p)
         end
 
-        # Map defaults
+        # Clone initial conditions
         for (orig_var, val) in ModelingToolkit.initial_conditions(compiled_cell)
             if haskey(local_sub, orig_var)
                 all_defaults[local_sub[orig_var]] = val
             end
         end
-        
+
+        # Clone equations (already simplified by the pre-compilation)
         for eq in full_equations(compiled_cell)
             push!(all_eqs, fixpoint_sub(eq, local_sub))
         end
-        
+
+        # Resolve V and I_ext for each compartment in this clone
         for (c_idx, comp) in enumerate(cell.compartments)
-            V_new = nothing
-            I_ext_new = nothing
-            
-            # 1. Resolve Voltage
-            true_V = resolve_v_var(compiled_cell, comp.interfaces.V)
-            if true_V !== nothing
-                V_new = local_sub[true_V]
-            end
-            
-            # 2. Match the exact input using the compartment name
             comp_name = string(nameof(comp.sys))
-            I_ext_str = "$(comp_name)₊injector₊I₊u(t)"
-            
-            for inp in ModelingToolkit.inputs(compiled_cell)
-                if endswith(string(inp), I_ext_str)
+            lookup = comp_lookup[c_idx]
+
+            # Find V: search for capacitor voltage unknown directly
+            # After mtkcompile, V is eliminated through an observed chain:
+            # V -> capacitor.v -> capacitor.p.v - capacitor.n.v -> capacitor.p.v
+            cap_name = string(comp.interfaces.cap_name)
+            V_new = nothing
+            for u in unknowns(compiled_cell)
+                u_str = string(u)
+                if occursin("$(comp_name)₊$(cap_name)₊", u_str) && endswith(u_str, "v(t)")
+                    V_new = local_sub[u]
+                    break
+                end
+            end
+            if V_new !== nothing
+                all_defaults[V_new] = comp.interfaces.V_init
+            end
+
+            # Find I_ext in compiled inputs
+            I_ext_new = nothing
+            for inp in compiled_inputs
+                if endswith(string(inp), lookup.I_ext_str)
                     I_ext_new = local_sub[inp]
                     break
                 end
             end
-            
+
             push!(nodes, (cell_idx=n_idx, comp_idx=c_idx, V=V_new, I_ext=I_ext_new))
-            push!(all_inputs, I_ext_new)
         end
 
-
-
-
+        # Clone continuous events
         for event in continuous_events(compiled_cell)
-            if event isa Pair
-                root_eqs = event.first
-                affect = event.second
-                new_root = [fixpoint_sub(eq, local_sub) for eq in root_eqs]
-                
-                if affect isa AbstractVector
-                    new_affect = [fixpoint_sub(eq, local_sub) for eq in affect]
-                    push!(all_events, new_root => new_affect)
-                elseif affect isa ModelingToolkit.ImperativeAffect
-                    new_mod = NamedTuple{keys(affect.modified)}([fixpoint_sub(v, local_sub) for v in affect.modified])
-                    new_obs = NamedTuple{keys(affect.observed)}([fixpoint_sub(v, local_sub) for v in affect.observed])
-                    new_affect = ModelingToolkit.ImperativeAffect(affect.f, new_mod, new_obs, affect.ctx)
-                    push!(all_events, new_root => new_affect)
-                end
+            event isa Pair || continue
+            root_eqs, affect = event.first, event.second
+            new_root = [fixpoint_sub(eq, local_sub) for eq in root_eqs]
+
+            if affect isa AbstractVector
+                push!(all_events, new_root => [fixpoint_sub(eq, local_sub) for eq in affect])
+            elseif affect isa ModelingToolkit.ImperativeAffect
+                new_mod = NamedTuple{keys(affect.modified)}([fixpoint_sub(v, local_sub) for v in affect.modified])
+                new_obs = NamedTuple{keys(affect.observed)}([fixpoint_sub(v, local_sub) for v in affect.observed])
+                push!(all_events, new_root => ModelingToolkit.ImperativeAffect(affect.f, new_mod, new_obs, affect.ctx))
             end
         end
     end
 
+    # 3. Wire up synapses
     syn_currents = Dict{Tuple{Int, Int}, Vector{Any}}()
     for (s_idx, conn) in enumerate(synapse_connections)
         pre_cell, pre_comp, post_cell, post_comp, gen = conn
-        syn_name = Symbol(:syn_, s_idx)
-        syn = gen(name=syn_name)
+        syn = gen(name=Symbol(:syn_, s_idx))
         push!(all_systems, syn)
-        
+
         V_pre = nodes[(nodes.cell_idx .== pre_cell) .& (nodes.comp_idx .== pre_comp), :V][1]
         V_post = nodes[(nodes.cell_idx .== post_cell) .& (nodes.comp_idx .== post_comp), :V][1]
-        
+
         push!(all_eqs, syn.V_pre ~ V_pre)
         push!(all_eqs, syn.V_post ~ V_post)
-        
+
         key = (post_cell, post_comp)
-        if !haskey(syn_currents, key)
-            syn_currents[key] = Any[]
-        end
-        push!(syn_currents[key], syn.I_syn)
+        haskey(syn_currents, key) || (syn_currents[key] = Any[])
+        # Inline the I_syn expression instead of referencing syn.I_syn variable.
+        # This lets MTK cleanly eliminate I_syn as an observed variable
+        # rather than keeping it as an algebraic unknown that confuses tearing.
+        I_syn_expr = (syn.V_post - syn.E_rev) * syn.s * syn.g_max
+        push!(syn_currents[key], I_syn_expr)
     end
 
+    # 4. Ground or expose unconnected inputs
     final_inputs = SymbolicT[]
     for row in eachrow(nodes)
         key = (row.cell_idx, row.comp_idx)
         I_ext = row.I_ext
-        
+
         if haskey(syn_currents, key)
-            I_syn_sum = sum(syn_currents[key])
-            push!(all_eqs, I_ext ~ I_syn_sum)
+            push!(all_eqs, I_ext ~ sum(syn_currents[key]))
+        elseif ground_inputs
+            push!(all_eqs, I_ext ~ 0.0)
         else
-            if ground_inputs
-                push!(all_eqs, I_ext ~ 0.0)
-            else
-                push!(final_inputs, I_ext)
-            end
+            push!(final_inputs, I_ext)
         end
     end
-    
-    @named net_sys = System(all_eqs, t, collect(all_vars_set), collect(all_params_set); 
-                            initial_conditions=all_defaults, 
-                            systems=all_systems, 
-                            continuous_events=all_events, 
-                            inputs=final_inputs, 
-                            name=name)
-                            
+
+    net_sys = System(all_eqs, t, all_vars, all_params;
+                     initial_conditions=all_defaults,
+                     systems=all_systems,
+                     continuous_events=all_events,
+                     inputs=final_inputs,
+                     name=name)
+
     return Network(net_sys, nodes, DataFrame(), final_inputs)
 end
 ````

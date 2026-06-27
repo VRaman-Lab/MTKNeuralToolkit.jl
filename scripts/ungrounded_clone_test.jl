@@ -1,4 +1,3 @@
-using MTKNeuralToolkit
 using ModelingToolkit: mtkcompile, @named, System, t_nounits as t, D_nounits as D, unknowns
 using OrdinaryDiffEq
 using Plots
@@ -18,16 +17,16 @@ hh_k_n = v -> (
     -0.002 * (v - 25.0) / (1.0 - exp((v - 25.0) / 9.0))
 )
 
-# 2. Build Compartments (using original build_floating_compartment)
+# 2. Build Compartments
 @named soma1_cap = Capacitor(C=1.0)
-@named na1 = GenericChannel(g=120.0, E_rev=50.0, gates=[GateSpec(:m, 3, 0.0, hh_na_m), GateSpec(:h, 1, 1.0, hh_na_h)])
+@named na1 = GenericChannel(g=120.0, E_rev=50.0, gates=[GateSpec(:m, 3, 0.0, hh_na_m), GateSpec(:h, 1, 0.0, hh_na_h)])
 @named k1  = GenericChannel(g=36.0, E_rev=-77.0, gates=[GateSpec(:n, 4, 0.0, hh_k_n)])
 @named l1  = GenericChannel(g=0.3, E_rev=-54.4, gates=GateSpec[])
-soma_comp = build_floating_compartment(soma1_cap, [na1, k1, l1], name=:soma)
+soma_comp = build_floating_compartment(soma1_cap, [na1, k1, l1], name=:soma, V_init=-65.0)
 
 @named dend1_cap = Capacitor(C=0.5)
 @named l2 = GenericChannel(g=0.1, E_rev=-54.4, gates=GateSpec[])
-dend_comp = build_floating_compartment(dend1_cap, [l2], name=:dend)
+dend_comp = build_floating_compartment(dend1_cap, [l2], name=:dend, V_init=-65.0)
 
 # 3. Build Cell with exposed inputs (ground_undriven=false)
 axial_conns = [(1, 2, 0.5)]
@@ -46,30 +45,25 @@ println("Compilation successful!")
 println("MTK inputs: ", ModelingToolkit.inputs(cell_compiled))
 
 # 5. Simulate
-u0 = Dict()
-for st in unknowns(cell_compiled)
-    name_str = string(st)
-    if occursin("cap₊v", name_str) 
-        u0[st] = -65.0
-    elseif occursin("h", name_str)
-        u0[st] = 1.0
-    elseif occursin("m", name_str) || occursin("n", name_str)
-        u0[st] = 0.0
-    end
-end
+# Set initial conditions cleanly using native MTK symbolic access.
+u0 = [
+    cell_compiled.soma.soma1_cap.v => -65.0,
+    cell_compiled.dend.dend1_cap.v => -65.0
+]
 
-# Set unbound input to 0.0
+# Set exposed unbound inputs to 0.0 so the system is fully determined
 for inp in ModelingToolkit.inputs(cell_compiled)
-    u0[inp] = 0.0
+    push!(u0, inp => 0.0)
 end
 
 println("Setting up ODE Problem...")
 prob = ODEProblem(cell_compiled, u0, (0.0, 50.0), fully_determined=true)
+
 println("Solving...")
 sol = solve(prob, Rosenbrock23(), saveat=0.01)
 println("Simulation successful!")
 
 # 6. Plot
-plot(sol, idxs=[cell_compiled.soma.V, cell_compiled.dend.V],
+plot(sol, idxs=[cell_compiled.soma.soma1_cap.v, cell_compiled.dend.dend1_cap.v],
             label=["Soma" "Dendrite"], 
             ylabel="Voltage (mV)", xlabel="Time (ms)", lw=2)
