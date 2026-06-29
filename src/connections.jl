@@ -1,6 +1,7 @@
 using Symbolics: fixpoint_sub, SymbolicT, Num, isarraysymbolic
 using ModelingToolkit: unknowns, parameters, equations, @named, System, t_nounits as t, isparameter, is_derivative, getname, full_equations, continuous_events, observed, inputs, ImperativeAffect
 using ModelingToolkitStandardLibrary.Blocks: RealInput
+using ModelingToolkitStandardLibrary.Electrical: Ground
 using DataFrames: DataFrame
 
 # =========================================================
@@ -35,13 +36,12 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0)
     @named axial_injector = CurrentSource()
     @named p = Pin()
     @named n = Pin()
-    @named ground = Ground()
 
     vars = SymbolicT[]
     eqs = Equation[]
     
-    # 1. Connect ALL negative terminals and the ground pin in ONE statement
-    n_pins = Any[capacitor.n, injector.n, axial_injector.n, n, ground.g]
+    # 1. Connect ALL negative terminals together (No local ground!)
+    n_pins = Any[capacitor.n, injector.n, axial_injector.n, n]
     for c in channels
         push!(n_pins, c.n)
     end
@@ -55,7 +55,7 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0)
     # 3. Expose boundary pins for acausal connections
     push!(eqs, connect(p, capacitor.p))
     
-    all_systems = System[ground, capacitor, injector, axial_injector, p, n]
+    all_systems = System[capacitor, injector, axial_injector, p, n]
     append!(all_systems, channels)
 
     sys = System(eqs, t, vars, SymbolicT[]; 
@@ -63,11 +63,9 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0)
                  initial_conditions = Dict(capacitor.v => V_init), 
                  name)
     
-    # 4. Extract the properly namespaced state variables for the interfaces
     cap_name = nameof(capacitor)
     V_state = getproperty(sys, cap_name).v
     
-    # Namespace all exposed variables so they are ready for parent systems
     interfaces = (
         V = V_state, 
         p_pin = getproperty(sys, nameof(p)), 
@@ -75,18 +73,6 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0)
         I_ext = getproperty(sys, nameof(injector)).I.u,
         I_axial = getproperty(sys, nameof(axial_injector)).I.u,
         cap_name=cap_name
-    )
-    return Compartment(sys, interfaces, V_init)
-end
-
-# Example for the future: A compartment with Calcium tracking
-function build_calcium_compartment(capacitor, channels, ca_var; name=:ca_compartment, V_init=-65.0)
-    # ... setup ...
-    interfaces = (
-        V = capacitor.v, 
-        I_ext = injector.I.u, 
-        I_axial = axial_injector.I.u,
-        Ca = ca_var  # Custom interface added!
     )
     return Compartment(sys, interfaces, V_init)
 end
@@ -102,20 +88,28 @@ function build_cell(compartments::Vector{Compartment}, axial_connections; driver
         push!(all_systems, comp.sys)
     end
     
+    # 1. Connect all n pins together to share a common reference
+    n_pins = [comp.interfaces.n_pin for comp in compartments]
+    push!(eqs, connect(n_pins...))
+    
+    # 2. Add a single global ground for the entire cell
+    @named ground = Ground()
+    push!(all_systems, ground)
+    push!(eqs, connect(ground.g, compartments[1].interfaces.n_pin))
+    
+    # 3. Axial connections
     for conn in axial_connections
         pre_idx, post_idx, R_val = conn
-        # Use the namespaced state variables from interfaces
         V_pre = compartments[pre_idx].interfaces.V
         V_post = compartments[post_idx].interfaces.V
-        
         I_ax_pre = compartments[pre_idx].interfaces.I_axial
         I_ax_post = compartments[post_idx].interfaces.I_axial
-        
         I_flow = (V_pre - V_post) / R_val
         push!(eqs, I_ax_pre ~ -I_flow)
         push!(eqs, I_ax_post ~ I_flow)
     end
     
+    # 4. Drivers
     for (target, stim) in drivers
         idx = target isa Int ? target : findfirst(==(target), compartments)
         push!(all_systems, stim)
@@ -123,6 +117,7 @@ function build_cell(compartments::Vector{Compartment}, axial_connections; driver
         push!(driven_exts, idx)
     end
     
+    # 5. Ground undriven injectors
     if ground_undriven
         for (idx, comp) in enumerate(compartments)
             if !(idx in driven_exts)
@@ -137,16 +132,14 @@ function build_cell(compartments::Vector{Compartment}, axial_connections; driver
         end
     end
     
-    # Ground the unused acausal boundary pins so the mathematical cell is balanced
+    # 6. Ground the unused acausal boundary pins
     for comp in compartments
         push!(eqs, comp.interfaces.p_pin.i ~ 0.0)
-        push!(eqs, comp.interfaces.n_pin.i ~ 0.0)
     end
     
     @named cell_sys = System(eqs, t, vars, SymbolicT[]; systems=all_systems, inputs=cell_inputs, name=name)
     return Cell(cell_sys, compartments, cell_inputs)
 end
-
 
 # =========================================================
 # 3. NETWORK BUILDERS (Acausal & Cloned)
@@ -161,11 +154,12 @@ function build_electrical_network(compartments::Vector{Compartment}, axial_conne
         push!(all_systems, comp.sys)
     end
 
-    # 1. Tie all grounds together by connecting the n pins.
-    if N > 1
-        n_pins = [compartments[i].sys.n for i in 1:N]
-        push!(eqs, connect(n_pins...))
-    end
+    # 1. Tie all grounds together and add a single global ground
+    n_pins = [compartments[i].sys.n for i in 1:N]
+    push!(eqs, connect(n_pins...))
+    @named gnd = Ground()
+    push!(all_systems, gnd)
+    push!(eqs, connect(gnd.g, compartments[1].sys.n))
 
     driven_compartments = Set{Int}()
     connected_p_pins = Set{Int}()
@@ -178,7 +172,7 @@ function build_electrical_network(compartments::Vector{Compartment}, axial_conne
         push!(eqs, connect(stim.output, compartments[idx].sys.injector.I))
     end
 
-    # 3. Axial Connections (Internal topology)
+    # 3. Axial Connections
     for conn in axial_connections
         pre_target, post_target, gen = conn[1], conn[2], conn[3]
         pre_idx = pre_target isa Compartment ? findfirst(==(pre_target), compartments) : pre_target
@@ -202,7 +196,7 @@ function build_electrical_network(compartments::Vector{Compartment}, axial_conne
         end
     end
 
-    # 4. Synaptic Connections (External topology)
+    # 4. Synaptic Connections
     for conn in synapse_connections
         pre_target, post_target, gen = conn[1], conn[2], conn[3]
         pre_idx = pre_target isa Compartment ? findfirst(==(pre_target), compartments) : pre_target
@@ -231,14 +225,12 @@ function build_electrical_network(compartments::Vector{Compartment}, axial_conne
         end
     end
 
-    # 5. Ground undriven injectors and unconnected pins cleanly
+    # 5. Ground undriven injectors and unconnected pins
     for i in 1:N
         if !(i in driven_compartments)
             push!(eqs, compartments[i].sys.injector.I.u ~ 0.0)
         end
-        
         push!(eqs, compartments[i].sys.axial_injector.I.u ~ 0.0)
-        
         if !(i in connected_p_pins)
             push!(eqs, compartments[i].sys.p.i ~ 0.0)
         end
@@ -286,7 +278,6 @@ function clone_compiled_cell(compiled_cell::System, n_idx::Int)
         end
     end
 
-    # Helper to safely clone a variable, avoiding duplicates
     function clone_var(orig, is_param)
         if haskey(sub, orig)
             return sub[orig]
@@ -308,9 +299,13 @@ function clone_compiled_cell(compiled_cell::System, n_idx::Int)
 
     # 2. Clone observed variables as unknowns and their equations
     for eq in observed(compiled_cell)
-        new_lhs = clone_var(eq.lhs, false)  # This now correctly adds them to new_sts!
+        if haskey(sub, eq.lhs)
+            continue
+        end
+        new_lhs = clone_var(eq.lhs, false) # This correctly adds it to new_sts
         push!(new_eqs, new_lhs ~ fixpoint_sub(eq.rhs, sub))
     end
+    
 
     # 3. Substitute and collect main equations
     append!(new_eqs, [fixpoint_sub(eq, sub) for eq in full_equations(compiled_cell)])
@@ -341,13 +336,6 @@ function clone_compiled_cell(compiled_cell::System, n_idx::Int)
     return new_eqs, new_sts, new_ps, sub, new_defaults, new_events
 end
 
-
-"""
-    build_network(cell::Cell, N::Int; synapse_connections=[], ground_inputs=true, name=:network)
-
-Pre-compiles a cell once, then uses `rename` to instantiate N clones as subsystems.
-MTK flattens them efficiently during network compilation, bypassing O(N) tearing.
-"""
 function build_network(cell::Cell, N::Int; synapse_connections=[], ground_inputs=true, name=:network)
     compiled_cell = mtkcompile(cell.sys, inputs=cell.inputs)
 
@@ -445,5 +433,3 @@ function build_network(cell::Cell, N::Int; synapse_connections=[], ground_inputs
 
     return Network(net_sys, nodes, DataFrame(), final_network_inputs)
 end
-
-
