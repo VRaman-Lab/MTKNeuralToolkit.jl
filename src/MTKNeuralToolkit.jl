@@ -29,4 +29,9 @@ export GateSpec, GenericChannel
 
 export ExpSynapse, VectorizedExpSynapse
 
+include("calcium_test.jl")
+export CaPort, CalciumPool, CaVChannel, KCaChannel, NoCalcium, CalciumTracker
+
+
+
 end

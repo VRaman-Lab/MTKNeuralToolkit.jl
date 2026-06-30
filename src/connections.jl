@@ -92,13 +92,38 @@ struct CouplingSpec
     coupling::System
 end
 
+# Ion config types
+struct NoCalcium end
+struct CalciumTracker
+    tau_Ca::Float64
+    Ca_init::Float64
+end
+CalciumTracker(; tau_Ca=100.0, Ca_init=0.0) = CalciumTracker(tau_Ca, Ca_init)
+
+# Ion dispatch
+wire_ions!(eqs, systems, channels, ::NoCalcium, topology, name) = nothing
+function wire_ions!(eqs, systems, channels, config::CalciumTracker, topology, name)
+    ca_pool = CalciumPool(topology=topology, tau_Ca=config.tau_Ca, Ca_init=config.Ca_init, name=Symbol(name, :_ca_pool))
+    push!(systems, ca_pool)
+    
+    ca_ports = System[ca_pool.port]
+    for c in channels
+        if hasproperty(c, :ca_port)
+            push!(ca_ports, c.ca_port)
+        end
+    end
+    push!(eqs, connect(ca_ports...))
+end
+
+
+
 
 # =========================================================
 # 2. COMPARTMENT & CELL BUILDERS
 # =========================================================
 
 function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0, 
-                           topology=Scalar())
+                           topology=Scalar(), ion_config=NoCalcium())
     
     p, n = create_pins(topology)
     injector, syn_injector = create_injectors(topology)
@@ -125,6 +150,9 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0,
     all_systems = System[capacitor, injector, syn_injector, p, n]
     append!(all_systems, channels)
 
+    # 4. Wire ions (dispatches on config and topology)
+    wire_ions!(eqs, all_systems, channels, ion_config, topology, name)
+
     sys = System(eqs, t, vars, SymbolicT[];
                  systems = all_systems,
                  initial_conditions = Dict(capacitor.v => init_v),
@@ -143,6 +171,7 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0,
     )
     return Compartment(sys, interfaces, V_init, topology)
 end
+
 
 
 # =========================================================
