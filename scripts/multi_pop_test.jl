@@ -2,9 +2,8 @@ using MTKNeuralToolkit
 using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq
 using Plots
-using Random
 
-# === Shared gate definitions ===
+# === Define shared gates ===
 hh_na_m = v -> (
     0.182 .* (v .+ 35.0) ./ (1.0 .- exp.(-(v .+ 35.0) ./ 9.0)),
     -0.124 .* (v .+ 35.0) ./ (1.0 .- exp.((v .+ 35.0) ./ 9.0))
@@ -21,72 +20,54 @@ hh_k_n = v -> (
 )
 potassium_gates = [GateSpec(:n, 4, 0.0, hh_k_n)]
 
-# === Population A: 20 excitatory neurons ===
-Na = 20
-@named somaA = Capacitor(N=Na, C=1.0)
-@named naA   = GenericChannel(N=Na, g=120.0, E_rev=50.0,  gates=sodium_gates)
-@named kA    = GenericChannel(N=Na, g=36.0,  E_rev=-77.0, gates=potassium_gates)
-@named leakA = GenericChannel(N=Na, g=0.3,   E_rev=-54.4, gates=GateSpec[])
+# === Build Excitatory Population (N=30) ===
+N_E = 30
+@named cap_E = Capacitor(N=N_E, C=1.0)
+@named na_E = GenericChannel(N=N_E, g=120.0, E_rev=50.0, gates=sodium_gates)
+@named k_E  = GenericChannel(N=N_E, g=36.0, E_rev=-77.0, gates=potassium_gates)
+@named leak_E = GenericChannel(N=N_E, g=0.3, E_rev=-54.4, gates=GateSpec[])
 
-popA = build_compartment(somaA, [naA, kA, leakA]; name=:popA, V_init=-65.0, N=Na)
+pop_E = build_compartment(cap_E, [na_E, k_E, leak_E]; name=:pop_E, V_init=-65.0, N=N_E)
 
-# === Population B: 15 neurons (no external drive — relies on A) ===
-Nb = 15
-@named somaB = Capacitor(N=Nb, C=1.0)
-@named naB   = GenericChannel(N=Nb, g=120.0, E_rev=50.0,  gates=sodium_gates)
-@named kB    = GenericChannel(N=Nb, g=36.0,  E_rev=-77.0, gates=potassium_gates)
-@named leakB = GenericChannel(N=Nb, g=0.3,   E_rev=-54.4, gates=GateSpec[])
+# === Build Inhibitory Population (N=10) ===
+N_I = 10
+@named cap_I = Capacitor(N=N_I, C=1.0)
+@named na_I = GenericChannel(N=N_I, g=120.0, E_rev=50.0, gates=sodium_gates)
+@named k_I  = GenericChannel(N=N_I, g=36.0, E_rev=-77.0, gates=potassium_gates)
+@named leak_I = GenericChannel(N=N_I, g=0.3, E_rev=-54.4, gates=GateSpec[])
 
-popB = build_compartment(somaB, [naB, kB, leakB]; name=:popB, V_init=-65.0, N=Nb)
+pop_I = build_compartment(cap_I, [na_I, k_I, leak_I]; name=:pop_I, V_init=-65.0, N=N_I)
 
-# === Connectivity matrices ===
-Random.seed!(42)
+# === Define Connectivity Matrices ===
+# Scaled down weights to prevent runaway excitation
+W_EE = 0.05 .* rand(N_E, N_E)   # E -> E
+W_EI = 0.1  .* rand(N_I, N_E)   # E -> I
+W_IE = 0.2  .* rand(N_E, N_I)   # I -> E
+W_II = 0.1  .* rand(N_I, N_I)   # I -> I
 
-# Intra-A: ring (neuron i → neuron i+1)
-W_AA = zeros(Na, Na)
-for i in 1:Na-1
-    W_AA[i+1, i] = 1.0
-end
-W_AA[1, Na] = 1.0
+# === Build Synapse Blocks ===
+syn_EE = build_synapse_block(pop_E, pop_E, W_EE; name=:syn_EE, E_rev=0.0)
+syn_EI = build_synapse_block(pop_E, pop_I, W_EI; name=:syn_EI, E_rev=0.0)
+syn_IE = build_synapse_block(pop_I, pop_E, W_IE; name=:syn_IE, E_rev=-80.0)
+syn_II = build_synapse_block(pop_I, pop_I, W_II; name=:syn_II, E_rev=-80.0)
 
-# A → B: random sparse, each B neuron receives from ~3 A neurons
-W_AB = zeros(Nb, Na)
-for j in 1:Nb
-    pres = randperm(Na)[1:3]  # 3 random pre neurons
-    for p in pres
-        W_AB[j, p] = 1.0
-    end
-end
+synapse_specs = [syn_EE, syn_EI, syn_IE, syn_II]
 
-# === Synapse blocks ===
-syn_intra_A = build_synapse_block(popA, popA, W_AA;
-                                   name=:syn_AA, g_max=2.0, τ=5.0,
-                                   E_rev=0.0, V_th=-20.0, slope=2.0)
+# === Drivers ===
+# Drive only the Excitatory population (index 1) with a constant 10.0
+# build_acausal_network will broadcast the scalar to the whole N_E population
+drivers = [(1, 15.0)]
 
-syn_A_to_B = build_synapse_block(popA, popB, W_AB;
-                                  name=:syn_AB, g_max=3.0, τ=8.0,
-                                  E_rev=0.0, V_th=-20.0, slope=2.0)
+# === Build Network ===
+net = build_acausal_network([pop_E, pop_I]; synapse_specs=synapse_specs, drivers=drivers)
 
-# === Drivers: only population A gets external drive ===
-drivers = [(1, collect(Float64, 1:Na))]  # popA (compartment 1) gets graded current
-
-# === Build one network with all compartments ===
-net = build_acausal_network([popA, popB];
-                            synapse_specs=[syn_intra_A, syn_A_to_B],
-                            drivers=drivers)
-
-net_compiled = mtkcompile(net.sys)
-prob = ODEProblem(net_compiled, [], (0.0, 50.0))
-sol = solve(prob, Rosenbrock23())
+@time net_compiled = mtkcompile(net.sys)
+prob = ODEProblem(net_compiled, [], (0.0, 100.0))
+@time sol = solve(prob, Rosenbrock23())
 
 # === Plot ===
-p1 = plot(sol, idxs=[net_compiled.popA.somaA.v...],
-          title="Population A (driven)", xlabel="Time", ylabel="V (mV)")
+# Note the fix: cap_E and cap_I instead of soma
+p1 = plot(sol, idxs=[net_compiled.pop_E.cap_E.v...], title="Excitatory Population", legend=false)
+p2 = plot(sol, idxs=[net_compiled.pop_I.cap_I.v...], title="Inhibitory Population", legend=false)
 
-p2 = plot(sol, idxs=[net_compiled.popB.somaB.v...],
-          title="Population B (driven only by A→B synapses)", xlabel="Time", ylabel="V (mV)")
-
-p3 = plot(sol, idxs=[net_compiled.syn_AB.s[1:5]...],
-          title="A→B synapse gating states (first 5)", xlabel="Time", ylabel="s")
-
-plot(p1, p2, p3, layout=(3,1), size=(800,750))
+plot(p1, p2, layout=(2,1), size=(800,500))

@@ -134,30 +134,28 @@ function wire_synapses!(eqs::Vector{Equation}, systems::Vector{System},
             push!(eqs, spec.synapse.V_post ~ spec.post_V)
         end
 
+        key = spec.post_I_syn
+        haskey(syn_by_target, key) || (syn_by_target[key] = SymbolicT[])
+        push!(syn_by_target[key], spec.synapse.I_syn)
+        push!(driven_syn_targets, key)
+        
         if spec.post_I_syn isa AbstractArray
-            # Block synapse: equate arrays directly
-            push!(eqs, spec.post_I_syn ~ spec.synapse.I_syn)
-            push!(block_driven_targets, spec.post_I_syn) # Track the whole array!
-            
-            # Still add elements to driven_syn_targets for safety
-            for i in 1:length(spec.post_I_syn)
-                push!(driven_syn_targets, spec.post_I_syn[i])
-            end
-        else
-            # Scalar synapse
-            key = spec.post_I_syn
-            haskey(syn_by_target, key) || (syn_by_target[key] = SymbolicT[])
-            push!(syn_by_target[key], spec.synapse.I_syn)
-            push!(driven_syn_targets, key)
+            push!(block_driven_targets, spec.post_I_syn)
         end
     end
 
     for (target, currents) in syn_by_target
-        push!(eqs, target ~ sum(currents))
+        if length(currents) == 1
+            push!(eqs, target ~ currents[1])
+        else
+            # reduce(+, ...) correctly sums both scalar and array symbolic variables
+            push!(eqs, target ~ reduce(+, currents))
+        end
     end
 
     return driven_syn_targets, block_driven_targets
 end
+
 
 
 
@@ -272,8 +270,8 @@ function build_acausal_network(compartments::Vector{Compartment};
     for i in 1:num_compartments
         comp = compartments[i]
         if haskey(comp.interfaces, :I_syn)
-            # Skip entirely if driven by a block synapse (reliable integer check)
-            if i in block_synapsed_compartments
+            # Skip entirely if driven by a block (vectorized) synapse
+            if comp.interfaces.I_syn in block_driven_targets
                 continue
             end
             
@@ -291,6 +289,7 @@ function build_acausal_network(compartments::Vector{Compartment};
             end
         end
     end
+
 
 
     # 8. Ground non-gap-junctioned p_pin.i
