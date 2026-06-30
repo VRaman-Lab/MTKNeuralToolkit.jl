@@ -39,7 +39,6 @@ N_I = 10
 pop_I = build_compartment(cap_I, [na_I, k_I, leak_I]; name=:pop_I, V_init=-65.0, N=N_I)
 
 # === Define Connectivity Matrices ===
-# Scaled down weights to prevent runaway excitation
 W_EE = 0.05 .* rand(N_E, N_E)   # E -> E
 W_EI = 0.1  .* rand(N_I, N_E)   # E -> I
 W_IE = 0.2  .* rand(N_E, N_I)   # I -> E

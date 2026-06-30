@@ -16,8 +16,6 @@ end
 
 struct Network
     sys::System
-    nodes::DataFrame
-    edges::DataFrame
     inputs::Vector{Any}
 end
 
@@ -157,12 +155,6 @@ function wire_synapses!(eqs::Vector{Equation}, systems::Vector{System},
 end
 
 
-
-
-
-
-
-
 # =========================================================
 # 4. NETWORK BUILDER
 # =========================================================
@@ -264,7 +256,8 @@ function build_acausal_network(compartments::Vector{Compartment};
     end
 
     # 6. Wire synapses
-    driven_syn_targets, _ = wire_synapses!(eqs, all_systems, synapse_specs)
+    # FIX 1: Capture block_driven_targets instead of discarding it with `_`
+    driven_syn_targets, block_driven_targets = wire_synapses!(eqs, all_systems, synapse_specs)
 
     # 7. Ground non-synapsed I_syn
     for i in 1:num_compartments
@@ -290,8 +283,6 @@ function build_acausal_network(compartments::Vector{Compartment};
         end
     end
 
-
-
     # 8. Ground non-gap-junctioned p_pin.i
     for i in 1:num_compartments
         comp = compartments[i]
@@ -306,8 +297,11 @@ function build_acausal_network(compartments::Vector{Compartment};
 
     net_sys = System(eqs, t, SymbolicT[], SymbolicT[];
                      systems = all_systems, name = name)
-    return Network(net_sys, DataFrame(), DataFrame(), SymbolicT[])
+                     
+    # FIX 2: Match the updated Network struct definition
+    return Network(net_sys, SymbolicT[])
 end
+
 
 
 
