@@ -111,15 +111,12 @@ soma = build_compartment(soma_cap, channels;
 # A single neuron is just a network with one node. We drive it with a constant
 # 10.0 mA current injection and solve.
 
+# NOTE: The first time you run this, Julia will JIT-compile the MTK symbolic 
+# system and the differential equation solver. This "Time To First Plot" (TTFP) 
+# can take 10-30 seconds. Subsequent runs (or changing parameters and re-running) 
+# will be nearly instantaneous!
 
-drivers = [(1, 10.0)] # (Index 1, Current 30.0)
-
-# Or make a more complex input with library blocks, which you can add multiply etc. If lazy, you can @register your own julia function for an input.
-# using ModelingToolkitStandardLibrary.Blocks: Sine
-# @named current_driver = Sine(amplitude=5.0, frequency=0.5, offset=10.0)
-
-# Pass the sine block block to the drivers list
-# drivers = [(1, current_driver)]
+drivers = [(1, 10.0)] # (Index 1, Current 10.0)
 
 net = build_acausal_network([soma]; drivers=drivers, name=:single_neuron)
 
@@ -128,7 +125,8 @@ sys = mtkcompile(net.sys)
 prob = ODEProblem(sys, [], (0.0, 100.0))
 
 println("Solving...")
-sol = solve(prob, Rosenbrock23())
+sol = solve(prob, Rosenbrock23(), reltol=1e-4, abstol=1e-4)
+
 
 # ------------------------------------------------------------------------------
 # 6. Plot the Results
