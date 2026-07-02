@@ -1,3 +1,22 @@
+# ==========================================
+# Core Network & Compartment Builders
+# ==========================================
+
+"""
+    Compartment
+
+A struct representing a single neural compartment (e.g., a soma, axon hillock, or dendritic segment).
+It wraps the generated ModelingToolkit `System` along with metadata about its physical and 
+electrical properties, and exposes a tuple of `interfaces` for acausal network connections.
+
+# Fields
+- `sys::System`: The underlying MTK system representing the compartment's equations.
+- `interfaces::NamedTuple`: Exposed boundary variables and pins (e.g., `V`, `p_pin`, `n_pin`, `I_ext`, `I_syn`).
+- `V_init::F`: The initial membrane voltage.
+- `topology::Union{Scalar, Vectorized}`: The electrical topology of the compartment.
+- `geometry::G`: The physical geometry used for scaling biophysical parameters.
+- `morphology::M`: The spatial morphology used for rendering or spatial simulations.
+"""
 struct Compartment{M<:AbstractMorphology,G<:AbstractGeometry, F<:AbstractFloat}
     sys::System
     interfaces::NamedTuple
@@ -7,12 +26,34 @@ struct Compartment{M<:AbstractMorphology,G<:AbstractGeometry, F<:AbstractFloat}
     morphology::M
 end
 
+"""
+    Network
 
+A struct representing the complete assembled neural network. It encapsulates the fully 
+connected MTK `System` and a vector of input variables for simulation drivers.
+
+# Fields
+- `sys::System`: The final compiled MTK system representing the entire network.
+- `inputs::Vector{Any}`: A collection of symbolic input variables for external stimulation.
+"""
 struct Network
     sys::System
     inputs::Vector{Any}
 end
 
+"""
+    SynapseSpec
+
+A specification struct used to wire a synapse between a presynaptic voltage and a postsynaptic current.
+It provides the mapping needed by `wire_synapses!` to inject currents into the correct compartments.
+
+# Fields
+- `pre_V`: The symbolic voltage variable of the presynaptic compartment.
+- `post_V`: The symbolic voltage variable of the postsynaptic compartment.
+- `post_I_syn`: The symbolic current variable of the postsynaptic compartment where the synapse will inject.
+- `synapse::System`: The MTK synapse system component (e.g., `ExpSynapse`, `CholSynapse`).
+- `post_comp::Union{Compartment, Nothing}`: The postsynaptic compartment struct (used for block synapse grounding logic).
+"""
 struct SynapseSpec
     pre_V
     post_V
@@ -21,24 +62,77 @@ struct SynapseSpec
     post_comp::Union{Compartment, Nothing} 
 end
 
+"""
+Outer constructor for `SynapseSpec` that defaults `post_comp` to `nothing`.
+Useful for scalar synapses where block grounding logic is not required.
+"""
 SynapseSpec(pre_V, post_V, post_I_syn, synapse) = SynapseSpec(pre_V, post_V, post_I_syn, synapse, nothing)
 
+"""
+    CouplingSpec
+
+A specification struct used to wire an acausal coupling (e.g., a Gap Junction) between two compartments.
+
+# Fields
+- `comp_i::Compartment`: The first compartment to be coupled.
+- `comp_j::Compartment`: The second compartment to be coupled.
+- `coupling::System`: The MTK coupling system component (e.g., `GapJunction`).
+"""
 struct CouplingSpec{C1<:Compartment, C2<:Compartment}
     comp_i::C1
     comp_j::C2
     coupling::System
 end
 
-# Ion config types
+
+# ==========================================
+# Ion Configuration
+# ==========================================
+
+"""
+    NoCalcium
+
+A configuration struct indicating that a compartment has no Calcium dynamics.
+When passed to `build_compartment`, it bypasses the creation of a `CalciumPool`.
+"""
 struct NoCalcium end
+
+"""
+    CalciumTracker
+
+A configuration struct enabling Calcium dynamics within a compartment.
+When passed to `build_compartment`, it instantiates a `CalciumPool` and connects it to all 
+channels that expose a `ca_port`.
+
+# Fields
+- `decay::Union{Float64, Function}`: Either a time constant for linear decay, or a function 
+  that takes the current Calcium concentration and returns the decay rate.
+- `Ca_init::Float64`: The initial intracellular Calcium concentration.
+"""
 struct CalciumTracker
     decay::Union{Float64, Function}
     Ca_init::Float64
 end
 
+"""
+Keyword argument constructor for `CalciumTracker`.
+"""
 CalciumTracker(; decay=100.0, Ca_init=0.0) = CalciumTracker(decay, Ca_init)
 
-# Ion dispatch
+
+# ==========================================
+# Internal Wiring Helpers
+# ==========================================
+
+"""
+    wire_ions!(eqs, systems, channels, config, topology, name)
+
+Internal helper function to wire ion dynamics into a compartment's equations and systems list.
+Uses multiple dispatch to handle different ion configurations.
+
+- If `config` is `NoCalcium`, it does nothing.
+- If `config` is `CalciumTracker`, it creates a `CalciumPool` and connects it to all channels in the compartment that expose a `ca_port`.
+"""
 wire_ions!(eqs, systems, channels, ::NoCalcium, topology, name) = nothing
 function wire_ions!(eqs, systems, channels, config::CalciumTracker, topology, name)
     # Pass decay to the CalciumPool
@@ -54,12 +148,77 @@ function wire_ions!(eqs, systems, channels, config::CalciumTracker, topology, na
     push!(eqs, connect(ca_ports...))
 end
 
+"""
+    wire_synapses!(eqs, systems, specs)
+
+Internal helper function that wires a collection of `SynapseSpec`s into the network equations.
+It binds the presynaptic and postsynaptic voltage variables to the synapse, and pre-collects 
+convergent synapses by their target current variable to write a single summed equation per target.
+
+Returns a tuple of `(driven_syn_targets, block_driven_targets)` used for grounding unconnected inputs.
+"""
+function wire_synapses!(eqs::Vector{Equation}, systems::Vector{System},
+                        specs::Vector{SynapseSpec})
+    syn_by_target = Dict{SymbolicT, Vector{SymbolicT}}()
+    driven_syn_targets = Set{SymbolicT}()
+    block_driven_targets = Set{SymbolicT}()
+
+    for spec in specs
+        push!(systems, spec.synapse)
+        
+        if hasproperty(spec.synapse, :V_pre)
+            push!(eqs, spec.synapse.V_pre ~ spec.pre_V)
+        end
+        if hasproperty(spec.synapse, :V_post)
+            push!(eqs, spec.synapse.V_post ~ spec.post_V)
+        end
+
+        key = spec.post_I_syn
+        haskey(syn_by_target, key) || (syn_by_target[key] = SymbolicT[])
+        push!(syn_by_target[key], spec.synapse.I_syn)
+        push!(driven_syn_targets, key)
+        
+        if spec.post_I_syn isa AbstractArray
+            push!(block_driven_targets, spec.post_I_syn)
+        end
+    end
+
+    for (target, currents) in syn_by_target
+        if length(currents) == 1
+            push!(eqs, target ~ currents[1])
+        else
+            push!(eqs, target ~ reduce(+, currents))
+        end
+    end
+
+    return driven_syn_targets, block_driven_targets
+end
 
 
-# =========================================================
-# 2. COMPARTMENT & CELL BUILDERS
-# =========================================================
+# ==========================================
+# Compartment & Network Builders
+# ==========================================
 
+"""
+    build_compartment(capacitor, channels; name, V_init, topology, ion_config, geometry, morphology)
+
+Builds a `Compartment` by connecting a `Capacitor`, current `injector`s, and a collection of ion `channels`.
+This forms the fundamental electrical unit of a neuron. All positive terminals (p) are connected together 
+to the membrane potential, and all negative terminals (n) are connected to ground. 
+
+# Arguments
+- `capacitor`: A `Capacitor` system defining the membrane capacitance.
+- `channels`: A vector of ion channel systems (e.g., `GenericChannel`, `CaVChannel`).
+- `name::Symbol`: The name of the compartment system.
+- `V_init::Float64`: Initial membrane voltage (default -65.0 mV).
+- `topology`: `Scalar()` or `Vectorized(N)` (default `Scalar()`).
+- `ion_config`: `NoCalcium()` or `CalciumTracker()` to handle ion pools.
+- `geometry`: Geometry struct for biophysical scaling (default `NoGeometry()`).
+- `morphology`: Morphology struct for spatial data (default `NoMorphology()`).
+
+# Returns
+- A `Compartment` struct containing the assembled `System` and its exposed `interfaces`.
+"""
 function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0, 
                            topology=Scalar(), ion_config=NoCalcium(), geometry = NoGeometry(), morphology=NoMorphology())
     
@@ -110,61 +269,23 @@ function build_compartment(capacitor, channels; name=:compartment, V_init=-65.0,
     return Compartment(sys, interfaces, V_init, topology, geometry, morphology)
 end
 
-
-
-# =========================================================
-# 3. SYNAPSE WIRING
-# =========================================================
-
 """
-    wire_synapses!(eqs, systems, specs)
+    build_acausal_network(compartments; coupling_specs, synapse_specs, drivers, name)
 
-Wires a collection of SynapseSpecs into the network equations.
-Pre-collects convergent synapses by target and writes one sum equation per target.
-Returns the set of driven I_syn targets (for grounding the rest).
+Assembles a collection of `Compartment`s into a complete `Network` system. 
+It handles grounding, wiring driving stimuli, gap junctions (via `CouplingSpec`), 
+and chemical synapses (via `SynapseSpec`).
+
+# Arguments
+- `compartments::Vector{<:Compartment}`: The compartments making up the network.
+- `coupling_specs`: A vector of `CouplingSpec` structs for acausal electrical connections.
+- `synapse_specs`: A vector of `SynapseSpec` structs for directed chemical synapses.
+- `drivers`: A vector of `(target, stim)` tuples, where `target` is a compartment or index, and `stim` is an MTK block, vector, or number.
+- `name::Symbol`: The name of the overall network system.
+
+# Returns
+- A `Network` struct containing the assembled MTK `System`.
 """
-function wire_synapses!(eqs::Vector{Equation}, systems::Vector{System},
-                        specs::Vector{SynapseSpec})
-    syn_by_target = Dict{SymbolicT, Vector{SymbolicT}}()
-    driven_syn_targets = Set{SymbolicT}()
-    block_driven_targets = Set{SymbolicT}()
-
-    for spec in specs
-        push!(systems, spec.synapse)
-        
-        if hasproperty(spec.synapse, :V_pre)
-            push!(eqs, spec.synapse.V_pre ~ spec.pre_V)
-        end
-        if hasproperty(spec.synapse, :V_post)
-            push!(eqs, spec.synapse.V_post ~ spec.post_V)
-        end
-
-        key = spec.post_I_syn
-        haskey(syn_by_target, key) || (syn_by_target[key] = SymbolicT[])
-        push!(syn_by_target[key], spec.synapse.I_syn)
-        push!(driven_syn_targets, key)
-        
-        if spec.post_I_syn isa AbstractArray
-            push!(block_driven_targets, spec.post_I_syn)
-        end
-    end
-
-    for (target, currents) in syn_by_target
-        if length(currents) == 1
-            push!(eqs, target ~ currents[1])
-        else
-            push!(eqs, target ~ reduce(+, currents))
-        end
-    end
-
-    return driven_syn_targets, block_driven_targets
-end
-
-
-# =========================================================
-# 4. NETWORK BUILDER
-# =========================================================
-
 function build_acausal_network(compartments::Vector{<:Compartment};
                                 coupling_specs=CouplingSpec[],
                                 synapse_specs=SynapseSpec[],
@@ -274,7 +395,24 @@ function build_acausal_network(compartments::Vector{<:Compartment};
     return Network(net_sys, SymbolicT[])
 end
 
+"""
+    build_synapse_block(pre_comp, post_comp, W; name, synapse_type, kwargs...)
 
+Helper function to create a `SynapseSpec` using a vectorized synapse block.
+It automatically determines the pre- and postsynaptic dimensions based on the weight matrix `W`
+and binds it to the provided compartments.
+
+# Arguments
+- `pre_comp::Compartment`: The presynaptic compartment.
+- `post_comp::Compartment`: The postsynaptic compartment.
+- `W`: The weight matrix (dimensions `N_post` x `N_pre`).
+- `name::Symbol`: The name for the synapse block system.
+- `synapse_type`: The vectorized synapse component to use (defaults to `VectorizedExpSynapse`).
+- `kwargs...`: Additional keyword arguments passed to `synapse_type` (e.g., `g_max`, `E_rev`).
+
+# Returns
+- A `SynapseSpec` configured for the network builder.
+"""
 function build_synapse_block(pre_comp, post_comp, W; name, 
                              synapse_type=VectorizedExpSynapse, kwargs...)
     N_pre  = size(W, 2)

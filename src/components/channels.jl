@@ -11,16 +11,35 @@ InfTau(inf_fn, tau_fn) = v -> (inf_fn(v) ./ tau_fn(v), (1.0 .- inf_fn(v)) ./ tau
 InfTauCa(inf_fn, tau_fn) = (v, ca) -> (inf_fn(v, ca) ./ tau_fn(v), (1.0 .- inf_fn(v, ca)) ./ tau_fn(v))
 
 @component function GenericChannel(; name, g, E_rev, gates::Vector{<:GateSpec}, topology=Scalar(), geometry=NoGeometry())
-    g_val = get_conductance(g, geometry) # Dispatch handles the math
+    g_val = get_conductance(g, geometry)
     
     if topology isa Scalar
         @named oneport = OnePort()
+        @parameters g=g_val E_rev=E_rev
     else
-        @named oneport = VectorizedOnePort(N=topology.N)
+        N = topology.N
+        @named oneport = VectorizedOnePort(N=N)
+        
+        # Properly handle array (heterogeneous) parameters in MTK v11
+        if g_val isa AbstractArray
+            @parameters begin
+                g[1:N] = g_val
+            end
+        else
+            @parameters g=g_val
+        end
+        
+        if E_rev isa AbstractArray
+            @parameters begin
+                E_rev[1:N] = E_rev
+            end
+        else
+            @parameters E_rev=E_rev
+        end
     end
+    
     @unpack v, i = oneport
     
-    @parameters g=g_val E_rev=E_rev
     vars = SymbolicT[]
     eqs = Equation[]
     init_conds = Dict{Any, Any}()
@@ -61,6 +80,7 @@ InfTauCa(inf_fn, tau_fn) = (v, ca) -> (inf_fn(v, ca) ./ tau_fn(v), (1.0 .- inf_f
                        initial_conditions=init_conds, 
                        name=name), oneport)
 end
+
 
 
 @component function ContinuousLIFChannel(; name, g_L=0.1, E_L=-70.0, V_th=-50.0, Δ_T=2.0, topology=Scalar())

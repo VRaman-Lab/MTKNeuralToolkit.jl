@@ -229,3 +229,51 @@ The synaptic state `s` is a vector of length `N_pre`. The postsynaptic current v
                   initial_conditions=init_conds, 
                   name=name)
 end
+
+
+"""
+    STDPSynapse(; name, g_max=1.0, E_rev=0.0, V_th=0.0, slope=2.0, τ_s=5.0, 
+                τ_plus=20.0, τ_minus=20.0, A_plus=0.1, A_minus=0.1, 
+                w_init=0.5, w_max=1.0, w_min=0.0)
+
+A continuous, smooth approximation of Spike-Timing-Dependent Plasticity (STDP) with soft bounds.
+It uses a continuous spike-detector function (sigmoid) and trace variables (`x` for pre, `y` for post) 
+to approximate the relative timing of spikes without requiring discrete event handling.
+
+The weight `w` evolves continuously according to:
+`dw/dt = A_plus * (w_max - w) * x * σ(V_post) - A_minus * (w - w_min) * y * σ(V_pre)`
+
+where `x` and `y` are exponentially decaying traces, and `σ(V)` is a sigmoid acting as a 
+continuous spike detector. This formulation is purely acausal and ODE-based, making it incredibly 
+robust for standard differential equation solvers while demonstrating classic STDP behavior.
+"""
+@component function STDPSynapse(; name, g_max=1.0, E_rev=0.0, V_th=0.0, slope=2.0,
+                                τ_s=5.0, τ_plus=20.0, τ_minus=20.0, 
+                                A_plus=0.1, A_minus=0.1, w_init=0.5, w_max=1.0, w_min=0.0)
+    
+    @variables s(t)=0.0 w(t)=w_init x(t)=0.0 y(t)=0.0 I_syn(t) V_pre(t) V_post(t)
+    @parameters g_max=g_max τ_s=τ_s τ_plus=τ_plus τ_minus=τ_minus  A_plus=A_plus A_minus=A_minus V_th=V_th E_rev=E_rev slope=slope  w_max=w_max w_min=w_min
+                
+    # Continuous spike detector
+    σ(V) = 1.0 / (1.0 + exp(-(V - V_th) / slope))
+    
+    eqs = Equation[
+        # Synaptic gating variable
+        D(s) ~ -s / τ_s + σ(V_pre), 
+        
+        # Pre- and post-synaptic activity traces
+        D(x) ~ -x / τ_plus + σ(V_pre),
+        D(y) ~ -y / τ_minus + σ(V_post),
+        
+        # Continuous STDP weight update with soft bounds
+        D(w) ~ A_plus * (w_max - w) * x * σ(V_post) - A_minus * (w - w_min) * y * σ(V_pre),
+        
+        # Synaptic current injection
+        I_syn ~ w * g_max * s * (E_rev - V_post)
+    ]
+    
+    return System(eqs, t, [s, w, x, y, I_syn, V_pre, V_post], 
+                  [g_max, τ_s, τ_plus, τ_minus, A_plus, A_minus, V_th, E_rev, slope, w_max, w_min]; 
+                  systems=System[], name=name)
+end
+

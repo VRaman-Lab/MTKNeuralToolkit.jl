@@ -3,7 +3,7 @@ using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq
 using Plots
 
-N = 100
+N = 20
 top = Vectorized(N)
 
 # === Build vectorized HH compartment ===
@@ -51,7 +51,7 @@ synapse_specs = [
 ]
 
 # === Drivers: graded current ===
-drivers = [(1, collect(Float64, 1:N))]
+drivers = [(1, collect(Float64, 1:2:2N))]
 
 # === Build via refactored build_acausal_network ===
 net = build_acausal_network([hh]; synapse_specs=synapse_specs, drivers=drivers)

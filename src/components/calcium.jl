@@ -48,20 +48,29 @@ end
 @component function CaVChannel(; name, g, gates::Vector{<:GateSpec}, topology=Scalar(), 
                                conversion_factor=1.0, E_rev=nothing, Ca_out=3000.0, nernst_factor=13.0,
                                geometry=NoGeometry(), tauCa=nothing)
-    # 1. Scale geometry
     g_val = get_conductance(g, geometry)
     conv_val = get_ca_conversion_factor(conversion_factor, geometry, tauCa)
     
     if topology isa Scalar
         @named oneport = OnePort()
         @named ca_port = CaPort(topology=topology)
+        @parameters g=g_val conversion_factor=conv_val
     else
         @named oneport = VectorizedOnePort(N=topology.N)
         @named ca_port = CaPort(topology=topology)
+        if g_val isa AbstractArray
+            @parameters g[1:topology.N]=g_val
+        else
+            @parameters g=g_val
+        end
+        if conv_val isa AbstractArray
+            @parameters conversion_factor[1:topology.N]=conv_val
+        else
+            @parameters conversion_factor=conv_val
+        end
     end
     @unpack v, i = oneport
     
-    @parameters g=g_val conversion_factor=conv_val
     vars = SymbolicT[]
     eqs = Equation[]
     init_conds = Dict{SymbolicT, Any}()
@@ -73,7 +82,15 @@ end
         E_rev_expr = nernst_factor .* log.(Ca_out ./ ca_port.Ca)
         push!(params, Ca_out, nernst_factor)
     else
-        @parameters E_rev=E_rev
+        if topology isa Scalar
+            @parameters E_rev=E_rev
+        else
+            if E_rev isa AbstractArray
+                @parameters E_rev[1:topology.N]=E_rev
+            else
+                @parameters E_rev=E_rev
+            end
+        end
         E_rev_expr = E_rev
         push!(params, E_rev)
     end

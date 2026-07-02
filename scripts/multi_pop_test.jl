@@ -63,7 +63,7 @@ drivers = [(1, 15.0)]
 net = build_acausal_network([pop_E, pop_I]; synapse_specs=synapse_specs, drivers=drivers)
 
 @time net_compiled = mtkcompile(net.sys)
-prob = ODEProblem(net_compiled, [], (0.0, 100.0))
+prob = ODEProblem(net_compiled, [], (0.0, 100.0), jac=true, sparse=true)
 @time sol = solve(prob, Rosenbrock23())
 
 # === Plot ===

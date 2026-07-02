@@ -52,7 +52,6 @@ fixed_reversal Component: A pure constant voltage source (Nernst battery).
     vars = SymbolicT[]
     eqs = Equation[]
     push!(eqs, v ~ E)
-    
     reversal_sys = System(
         eqs, 
         t, 
@@ -125,31 +124,24 @@ end
     return extend(System(eqs, t, vars, params; systems=System[], name=name), twoport)
 end
 
-@component function ChemicalSynapse(; name, g_max=2.0, τ=5.0, v_th=-20.0, w=0.5, E_rev=0.0)
-    @named twoport = TwoPort()
-    @unpack v1, i1, v2, i2 = twoport
-
-    @parameters E_rev=E_rev g_max=g_max τ=τ v_th=v_th w=w
-    params = SymbolicT[]
-    push!(params, E_rev, g_max, τ, v_th, w)
-
-    @variables s(t) = 0.0
-    vars = SymbolicT[]
-    push!(vars, s)
-
-    eqs = Equation[]
-    push!(eqs, i1 ~ 0.0)
-    push!(eqs, D(s) ~ -s / τ)
-    push!(eqs, i2 ~ (v2 - E_rev) * s * g_max)
-
-    root_eqs = Equation[]
-    push!(root_eqs, v1 ~ v_th)
-    affect = Equation[]
-    push!(affect, s ~ Pre(s) + w)
-    events = [root_eqs => affect]
-
-    return extend(System(eqs, t, vars, params; systems=System[], continuous_events=events, name=name), twoport)
+@component function EventSynapse(; name, g_max=2.0, τ=5.0, V_th=-20.0, w=0.5, E_rev=0.0)
+    @variables s(t)=0.0 I_syn(t) V_pre(t) V_post(t)
+    @parameters g_max=g_max τ=τ V_th=V_th w=w E_rev=E_rev
+    
+    eqs = [
+        D(s) ~ -s / τ,
+        I_syn ~ g_max * s * (E_rev - V_post)
+    ]
+    
+    # Event: when V_pre crosses V_th upwards, add w to s
+    root_eq = V_pre ~ V_th
+    affect = s ~ Pre(s) + w
+    events = [root_eq => affect]
+    
+    return System(eqs, t, [s, I_syn, V_pre, V_post], [g_max, τ, V_th, w, E_rev]; 
+                  systems=System[], events=events, name=name)
 end
+
 
 # ==========================================
 # VECTORIZED ELECTRICAL COMPONENTS
