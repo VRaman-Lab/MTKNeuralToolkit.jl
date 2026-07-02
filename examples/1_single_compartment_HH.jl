@@ -21,63 +21,60 @@ using Plots
 # ------------------------------------------------------------------------------
 # 1. Define Ion Channel Gating Dynamics
 # ------------------------------------------------------------------------------
-# In the HH formalism, gating variables (m, h, n) evolve according to 
-# transition rates: alpha (opening) and beta (closing).
-# We define these as standard Julia functions. Note the use of broadcasting (.+)
-# so these exact same functions work for both scalar and vectorized topologies.
+# We use the standard Hodgkin-Huxley formulations (Dayan & Abbott) where 
+# V_rest = -65 mV.
 
 hh_na_m = v -> (
-    0.182 .* (v .+ 35.0) ./ (1.0 .- exp.(-(v .+ 35.0) ./ 9.0)),  # alpha_m
-    -0.124 .* (v .+ 35.0) ./ (1.0 .- exp.((v .+ 35.0) ./ 9.0))   # beta_m
+    0.1 .* (v .+ 40.0) ./ (1.0 .- exp.(-(v .+ 40.0) ./ 10.0)),  # alpha_m
+    4.0 .* exp.(-(v .+ 65.0) ./ 18.0)                           # beta_m
 )
 
 hh_na_h = v -> (
-    0.25 .* exp.(-(v .+ 90.0) ./ 12.0),                          # alpha_h
-    0.25 .* (exp.((v .+ 62.0) ./ 6.0)) ./ exp.(-(v .+ 90.0) ./ 12.0) # beta_h
-)
-
-hh_k_n = v -> (
-    0.02 .* (v .- 25.0) ./ (1.0 .- exp.(-(v .- 25.0) ./ 9.0)),   # alpha_n
-    -0.002 .* (v .- 25.0) ./ (1.0 .- exp.((v .- 25.0) ./ 9.0))   # beta_n
+    0.07 .* exp.(-(v .+ 65.0) ./ 20.0),                         # alpha_h
+    1.0 ./ (1.0 .+ exp.(-(v .+ 35.0) ./ 10.0))                  # beta_h
 )
 
 # ------------------------------------------------------------------------------
-# NOTE: Using Infinity/Tau Formulations
+# Defining Gating Dynamics: Alpha/Beta vs. Infinity/Tau
 # ------------------------------------------------------------------------------
-# Many modern neuroscience papers define gating dynamics using steady-state 
-# (infinity) functions and time constants, rather than alpha/beta rates.
+
+# Method 1: Alpha/Beta Formulation
+hh_k_n_ab = v -> (
+    0.01 .* (v .+ 55.0) ./ (1.0 .- exp.(-(v .+ 55.0) ./ 10.0)), # alpha_n
+    0.125 .* exp.(-(v .+ 65.0) ./ 80.0)                         # beta_n
+)
+
+# Method 2: Infinity/Tau Formulation (using the InfTau helper)
 # MTKNeuralToolkit provides the `InfTau` helper to automatically convert these 
 # into the alpha/beta formulation used internally:
 #   alpha = inf / tau
 #   beta  = (1 - inf) / tau
 #
-# For example, if a paper defined a K+ n-gate like this:
-#   n_inf(v) = 1.0 / (1.0 + exp((v + 50.0) / -5.0))
-#   n_tau(v) = 5.0
-#
-# You could define it  using `InfTau` instead of writing alpha/beta:
-#
-#   hh_k_n_alt = InfTau(v -> 1.0 ./ (1.0 .+ exp.((v .+ 50.0) ./ -5.0)), 
-#                       v -> 5.0)
-#   potassium_gates_alt = [GateSpec(:n, 4, 0.0, hh_k_n_alt)]
-# ------------------------------------------------------------------------------
-
+# Here, we define n_inf and tau_n mathematically equivalent to Method 1:
+n_alpha(v) = 0.01 .* (v .+ 55.0) ./ (1.0 .- exp.(-(v .+ 55.0) ./ 10.0))
+n_beta(v)  = 0.125 .* exp.(-(v .+ 65.0) ./ 80.0)
+n_inf(v)   = n_alpha(v) ./ (n_alpha(v) .+ n_beta(v))
+tau_n(v)   = 1.0 ./ (n_alpha(v) .+ n_beta(v))
+hh_k_n_inftau = InfTau(n_inf, tau_n)
 
 # ------------------------------------------------------------------------------
 # 2. Define Gate Specifications
 # ------------------------------------------------------------------------------
-# A GateSpec bundles the gating dynamics with its symbolic name, the power it 
-# is raised to in the conductance equation, and its initial condition (ic).
-# For HH: Na+ is m^3 * h, and K+ is n^4.
-
+# At V = -65 mV, the steady-state values are:
+# m = 0.052, h = 0.596, n = 0.317
 sodium_gates = [
-    GateSpec(:m, 3, 0.0, hh_na_m), 
-    GateSpec(:h, 1, 0.0, hh_na_h)
+    GateSpec(:m, 3, 0.052, hh_na_m), 
+    GateSpec(:h, 1, 0.596, hh_na_h)
 ]
 
+# We use the InfTau formulation here to demonstrate it, but we could just as 
+# easily swap it for `hh_k_n_ab` (the alpha/beta version) and get the exact same result.
+# NOTE: We name the K gate `n_gate` to avoid a namespace clash with the negative 
+# electrical pin `n` in MTK's OnePort!
 potassium_gates = [
-    GateSpec(:n, 4, 0.0, hh_k_n)
+    GateSpec(:n_gate, 4, 0.317, hh_k_n_inftau)
 ]
+
 
 # ------------------------------------------------------------------------------
 # 3. Build the Electrical Components
@@ -115,7 +112,7 @@ soma = build_compartment(soma_cap, channels;
 # 10.0 mA current injection and solve.
 
 
-drivers = [(1, 20.0)] # (Index 1, Current 20.0)
+drivers = [(1, 10.0)] # (Index 1, Current 30.0)
 
 # Or make a more complex input with library blocks, which you can add multiply etc. If lazy, you can @register your own julia function for an input.
 # using ModelingToolkitStandardLibrary.Blocks: Sine
@@ -136,8 +133,30 @@ sol = solve(prob, Rosenbrock23())
 # ------------------------------------------------------------------------------
 # 6. Plot the Results
 # ------------------------------------------------------------------------------
-plot(sol, idxs=[sys.soma.soma_cap.v], 
-     title="Example 1: Single-Compartment HH Neuron", 
-     ylabel="Membrane Potential (mV)", 
-     xlabel="Time (ms)", 
-     legend=false)
+# Because MTKNeuralToolkit is built on ModelingToolkit, EVERY variable in the 
+# system (gating states, alpha/beta rates, local channel currents) is a named 
+# symbolic variable. You don't need custom logging callbacks to observe them; 
+# you just access them via the compiled system's namespace.
+
+# 6a. Plot the main membrane voltage
+p1 = plot(sol, idxs=[sys.soma.soma_cap.v], 
+          title="Example 1: Membrane Potential", 
+          ylabel="V (mV)", legend=false)
+
+# 6b. Plot the internal HH gating variables (m, h, n)
+# We reach into the sodium channel (na_ch) and potassium channel (k_ch) 
+# components we created in Step 3.
+p2 = plot(sol, idxs=[sys.soma.na_ch.m, sys.soma.na_ch.h, sys.soma.k_ch.n_gate], 
+          title="Gating Variables", 
+          labels=["m (Na+)" "h (Na+)" "n (K+)"], 
+          ylabel="Fraction open", legend=:right)
+
+# 6c. Plot the individual currents flowing through each channel
+p3 = plot(sol, idxs=[sys.soma.na_ch.i, sys.soma.k_ch.i, sys.soma.leak.i], 
+          title="Channel Currents", 
+          labels=["I_Na" "I_K" "I_Leak"], 
+          ylabel="Current (mA)", xlabel="Time (ms)", legend=:right)
+
+# Increase canvas height to fit all three plots comfortably
+plot(p1, p2, p3, layout=(3,1), size=(800, 900))
+

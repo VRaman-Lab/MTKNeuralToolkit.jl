@@ -97,7 +97,21 @@ net = build_acausal_network([pop_E, pop_I]; synapse_specs=synapse_specs, drivers
 
 println("Compiling vectorized network...")
 sys = mtkcompile(net.sys)
+
+# Vectorized systems generate large Jacobians, but because the equations are 
+# array-based, the Jacobian is highly sparse (most neurons only affect their own 
+# gating variables, with off-diagonal elements coming only from the synapse blocks).
+# Passing `jac=true, sparse=true` tells the solver to compute an analytical Jacobian 
+# and use fast sparse linear algebra, drastically speeding up the simulation.
 prob = ODEProblem(sys, [], (0.0, 100.0), jac=true, sparse=true)
+
+# We can visualize the sparsity pattern of the Jacobian using Plots.spy.
+# You'll see a heavy block-diagonal structure (intrinsic dynamics) with off-diagonal 
+# bands representing the synaptic couplings between the E and I populations.
+println("Plotting Jacobian sparsity pattern...")
+p_jac = spy(prob.f.jac_prototype, 
+            title="Jacobian Sparsity Pattern", 
+            legend=false)
 
 println("Solving...")
 sol = solve(prob, Rosenbrock23())
@@ -113,4 +127,6 @@ p1 = plot(sol, idxs=[sys.pop_E.cap.v...],
 p2 = plot(sol, idxs=[sys.pop_I.cap.v...], 
           title="Inhibitory Population", legend=false, ylabel="V (mV)", xlabel="Time (ms)")
 
-plot(p1, p2, layout=(2,1), size=(800, 500))
+# Combine the simulation plots with the sparsity plot
+plot(p1, p2, p_jac, layout=(3,1), size=(800, 800))
+
