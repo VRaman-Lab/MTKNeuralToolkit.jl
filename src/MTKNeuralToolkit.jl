@@ -1,12 +1,13 @@
 module MTKNeuralToolkit
 
 using ModelingToolkit
-import ModelingToolkitStandardLibrary.Blocks: RealInput, Constant, RealOutput, RealInputArray
-using ModelingToolkit: t_nounits as t, D_nounits as D, connect, SymbolicT, ImperativeAffect
-using ModelingToolkit: mtkcompile, Pre
+using ModelingToolkit: t_nounits as t, D_nounits as D, connect, Pre
+using ModelingToolkit: @component, @connector, @named, @parameters, @unpack, @variables, Equation, Flow, System, extend
 using OrdinaryDiffEq
-import SymbolicUtils: scalarize
-import Symbolics: Sym, Num
+import ModelingToolkitStandardLibrary.Blocks: RealInput, RealInputArray
+using Symbolics: SymbolicT
+
+
 
 # ==========================================
 # 1. Core Framework

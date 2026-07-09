@@ -19,9 +19,7 @@ using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq
 using Plots
 
-# ------------------------------------------------------------------------------
-# 1. Define Shared Gating Dynamics
-# ------------------------------------------------------------------------------
+# ## 1. Define Shared Gating Dynamics
 # These functions use broadcasting (.) so they work identically for both scalar 
 # and vectorized topologies.
 
@@ -41,9 +39,7 @@ hh_k_n = v -> (
 )
 potassium_gates = [GateSpec(:n, 4, 0.0, hh_k_n)]
 
-# ------------------------------------------------------------------------------
-# 2. Define Topologies and Build Populations
-# ------------------------------------------------------------------------------
+# ## 2. Define Topologies and Build Populations
 N_E = 15 
 N_I = 5  
 top_E = Vectorized(N_E)
@@ -64,9 +60,7 @@ end
 pop_E = build_population(:pop_E, top_E)
 pop_I = build_population(:pop_I, top_I)
 
-# ------------------------------------------------------------------------------
-# 3. Define Connectivity Matrices
-# ------------------------------------------------------------------------------
+# ## 3. Define Connectivity Matrices
 # The weight matrix W maps presynaptic populations to postsynaptic populations.
 # Dimensions must be (N_post, N_pre).
 
@@ -75,9 +69,7 @@ W_EI = 1.0 .* rand(N_I, N_E)   #E -> I
 W_IE = 2.0 .* rand(N_E, N_I)   #I -> E
 W_II = 1.0 .* rand(N_I, N_I)   #I -> I
 
-# ------------------------------------------------------------------------------
-# 4. Build Synapse Blocks
-# ------------------------------------------------------------------------------
+# ## 4. Build Synapse Blocks
 # `build_synapse_block` sets up the vectorized synapse matrices and creates the 
 # SynapseSpecs for the network builder.
 
@@ -88,9 +80,7 @@ syn_II = build_synapse_block(pop_I, pop_I, W_II; name=:syn_II, E_rev=-80.0)
 
 synapse_specs = [syn_EE, syn_EI, syn_IE, syn_II]
 
-# ------------------------------------------------------------------------------
-# 5. Driving Stimuli & Network Assembly
-# ------------------------------------------------------------------------------
+# ## 5. Driving Stimuli & Network Assembly
 # Give the excitatory population a constant current kick to start the activity
 drivers = [(1, 25.0)]
 
@@ -122,9 +112,7 @@ p_jac = spy(prob.f.jac_prototype,
 println("Solving...")
 sol = solve(prob, Rosenbrock23())
 
-# ------------------------------------------------------------------------------
-# 6. Plot the Results
-# ------------------------------------------------------------------------------
+# ## 6. Plot the Results
 # We splat the voltage array (...) to plot all individual elements in the population. Couldn't find a way to add numberings with MTK but I assume it exists...?
 p1 = plot(sol, idxs=[sys.pop_E.cap.v...], 
           title="Excitatory Population", legend=false, ylabel="V (mV)")

@@ -10,9 +10,7 @@ using MTKNeuralToolkit.PrinzNeuron
 using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq, Plots
 
-# ------------------------------------------------------------------------------
-# 1. Network Parameters & Geometry
-# ------------------------------------------------------------------------------
+# ## Network Parameters & Geometry
 # Prinz uses a custom geometry to scale capacitance, conductances, and calcium 
 # flow. We instantiate it here and define shared Calcium parameters.
 # Note that the custom geometry occupies < 10 lines of code in the src/library/PrinzCalciumNeuron.jl file. Geometries are easy to make.
@@ -22,9 +20,7 @@ const Ca_inf = 0.05
 const prinz_ion_config = CalciumTracker(decay=ca -> (Ca_inf .- ca) ./ tauCa, Ca_init=Ca_inf)
 const nernst_factor = 500.0 * 8.6174e-5 * 283.15
 
-# ------------------------------------------------------------------------------
-# 2. Local Channel Builders
-# ------------------------------------------------------------------------------
+# ## Local Channel Builders
 # We use closures to neatly attach the geometry, reversal potentials, and tauCa 
 # to the pre-built Prinz gate definitions. This keeps the neuron builder clean.
 NaCh(g; name)   = GenericChannel(name=name, g=g, E_rev=50.0, gates=PrinzNeuron.na_gates, geometry=geom)
@@ -38,9 +34,7 @@ KCaCh(g; name)  = KCaChannel(name=name, g=g, E_rev=-80.0, gates=PrinzNeuron.kca_
 KdrCh(g; name)  = GenericChannel(name=name, g=g, E_rev=-80.0, gates=PrinzNeuron.kdr_gates, geometry=geom)
 LeakCh(g; name) = GenericChannel(name=name, g=g, E_rev=-50.0, gates=GateSpec[], geometry=geom)
 
-# ------------------------------------------------------------------------------
-# 3. Build Neurons
-# ------------------------------------------------------------------------------
+# ## Build Neurons
 function build_AB()
     @named cap  = Capacitor(geometry=geom)
     @named na   = NaCh(100.0); @named cas  = CaSCh(6.0);  @named cat = CaTCh(2.5)
@@ -76,9 +70,7 @@ LP = build_LP()
 neurons = [AB, PY, LP]
 
 
-# ------------------------------------------------------------------------------
-# 4. Define Synapses & Network
-# ------------------------------------------------------------------------------
+# ## Define Synapses & Network
 function STG_synapses()
     @named ABLP_chol = CholSynapse(g_max=30.0, geometry=geom)
     @named ABPY_chol = CholSynapse(g_max=3.0 , geometry=geom)
@@ -103,9 +95,7 @@ net = build_acausal_network(neurons; synapse_specs=STG_synapses(), name=:stg)
 println("Compiling STG network...")
 sys = mtkcompile(net.sys)
 
-# ------------------------------------------------------------------------------
-# 5. Simulate & Plot
-# ------------------------------------------------------------------------------
+# ## Simulate & Plot
 # STG networks often need a few seconds to settle into their characteristic 
 # alternating rhythm (pyloric rhythm). We simulate for 3000 ms.
 tspan = (0.0, 10000.0)

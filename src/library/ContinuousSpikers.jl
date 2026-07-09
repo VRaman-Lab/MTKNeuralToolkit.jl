@@ -1,7 +1,8 @@
 module ContinuousSpikers
-    using ..MTKNeuralToolkit: GateSpec, GenericChannel, Scalar, Vectorized, OnePort
-    using ModelingToolkit: t_nounits as t, D_nounits as D, @named, @variables, @parameters, @component, System, Equation, SymbolicT, extend, @unpack
-    using Symbolics: unwrap
+    using ..MTKNeuralToolkit: GateSpec, GenericChannel, Scalar, OnePort
+    using ModelingToolkit: t_nounits as t, D_nounits as D, @named, @variables, @parameters, @component, System, Equation, extend, @unpack
+    using Symbolics: SymbolicT
+
 
     # ==========================================
     # 1. Morris-Lecar (Built via GenericChannel)

@@ -12,9 +12,7 @@ using SymbolicIndexingInterface: parameter_values, setp
 using PreallocationTools
 using Plots
 
-# ------------------------------------------------------------------------------
-# 1. Build the Network & Generate Target Data
-# ------------------------------------------------------------------------------
+# ## Build the Network & Generate Target Data
 top = Scalar()
 
 function build_neuron(name::Symbol)
@@ -50,9 +48,7 @@ timesteps = 0.0:0.5:200.0
 sol = solve(true_prob, Tsit5(); saveat=timesteps)
 target_data = Array(sol)
 
-# ------------------------------------------------------------------------------
-# 2. Setup the Optimization Problem
-# ------------------------------------------------------------------------------
+# ## Setup the Optimization Problem
 guess_g_max = 1.0
 @named fit_synapse = ExpSynapse(g_max=guess_g_max, τ=5.0, E_rev=0.0, V_th=-20.0, slope=2.0)
 
@@ -92,9 +88,7 @@ adtype = AutoForwardDiff()
 optfn = OptimizationFunction(loss, adtype)
 optprob = OptimizationProblem(optfn, [guess_g_max], opt_params)
 
-# ------------------------------------------------------------------------------
-# 3. Optimize and Plot
-# ------------------------------------------------------------------------------
+# ## Optimize and Plot
 println("Solving with initial guess for visualization...")
 # Capture the behavior before optimization to show how far it came
 init_sol = solve(fit_prob, Tsit5(); saveat=timesteps)

@@ -18,6 +18,8 @@ SciMLStructures = "53ae85a6-f571-4167-b2af-e1d143709226"
 SymbolicIndexingInterface = "2efcf032-c050-4f8e-a9bb-153293bab1f5"
 SymbolicUtils = "d1185830-fcd6-423d-90d6-eec64667417b"
 Symbolics = "0c5d862f-8b57-4792-8d23-62f2024744c7"
+OrdinaryDiffEqDifferentiation = "4302a76b-040a-498a-8c04-15b101fed76b" # delete at some point. pinning due to upstream bug in a newer version 3.2.3
+
 
 [compat]
 DiffEqCallbacks = "4"
@@ -31,6 +33,7 @@ SymbolicIndexingInterface = "0.3"
 SymbolicUtils = "4"
 Symbolics = "7"
 ModelingToolkit="11"
+OrdinaryDiffEqDifferentiation = "=3.2.2" # just to fix a 3.2.3 precompilation bug
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

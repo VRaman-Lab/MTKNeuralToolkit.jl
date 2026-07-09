@@ -15,9 +15,7 @@ using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq
 using Plots
 
-# ------------------------------------------------------------------------------
-# 1. Build Two Neurons
-# ------------------------------------------------------------------------------
+# ##. Build Two Neurons
 top = Scalar()
 
 function build_neuron(name::Symbol)
@@ -31,9 +29,7 @@ end
 pre_neuron  = build_neuron(:pre_neuron)
 post_neuron = build_neuron(:post_neuron)
 
-# ------------------------------------------------------------------------------
-# 2. Define the STDP Synapse
-# ------------------------------------------------------------------------------
+# ## Define the STDP Synapse
 # The STDPSynapse continuously updates its weight `w` based on the traces `x` (pre) 
 # and `y` (post). 
 # - If pre spikes before post, x is high when y spikes -> LTP (weight increases)
@@ -52,9 +48,7 @@ synapse_specs = [
     )
 ]
 
-# ------------------------------------------------------------------------------
-# 3. Driving Stimuli (Phase-Shifted Sine Waves)
-# ------------------------------------------------------------------------------
+# ## Driving Stimuli (Phase-Shifted Sine Waves)
 # To demonstrate BOTH potentiation and depression, we drive both neurons with 
 # the same frequency, but shift the phase.
 # Swap the driver with a higher phase to see either LTP or LTD 
@@ -72,9 +66,7 @@ drivers = [
 ]
 
 
-# ------------------------------------------------------------------------------
-# 4. Build and Simulate
-# ------------------------------------------------------------------------------
+# ## Build and Simulate
 net = build_acausal_network([pre_neuron, post_neuron]; 
                             synapse_specs=synapse_specs, 
                             drivers=drivers, 
@@ -87,9 +79,7 @@ prob = ODEProblem(sys, [], (0.0, 500.0), jac=true, sparse=true)
 println("Solving...")
 sol = solve(prob, Rosenbrock23(), reltol=1e-4, abstol=1e-4)
 
-# ------------------------------------------------------------------------------
-# 5. Plot the Results
-# ------------------------------------------------------------------------------
+# ## Plot the Results
 p1 = plot(sol, idxs=[sys.pre_neuron.cap.v, sys.post_neuron.cap.v], 
           title="Neuron Voltages", ylabel="V (mV)", 
           labels=["Pre" "Post"], legend=:right)

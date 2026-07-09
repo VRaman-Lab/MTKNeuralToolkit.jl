@@ -11,9 +11,7 @@ using SymbolicIndexingInterface: parameter_values, setp
 using PreallocationTools
 using Plots
 
-# ------------------------------------------------------------------------------
-# 1. Build the True System & Generate Data
-# ------------------------------------------------------------------------------
+# ## Build the True System & Generate Data
 top = Scalar()
 
 function build_hh_neuron(name::Symbol; gNa=120.0, gK=36.0)
@@ -40,9 +38,7 @@ println("Generating training data...")
 sol = solve(odeprob, Tsit5(); saveat=timesteps)
 data = Array(sol)
 
-# ------------------------------------------------------------------------------
-# 2. Setup the Optimization Problem
-# ------------------------------------------------------------------------------
+# ## Setup the Optimization Problem
 guess_gNa = 80.0
 guess_gK  = 20.0
 
@@ -77,9 +73,7 @@ adtype = AutoForwardDiff()
 optfn = OptimizationFunction(loss, adtype)
 optprob = OptimizationProblem(optfn, [guess_gNa, guess_gK], opt_params)
 
-# ------------------------------------------------------------------------------
-# 3. Optimize and Plot
-# ------------------------------------------------------------------------------
+# ## Optimize and Plot
 println("Solving with initial guesses for visualization...")
 # Capture the behavior before optimization to show how far it came
 init_sol = solve(fit_prob, Tsit5(); saveat=timesteps)

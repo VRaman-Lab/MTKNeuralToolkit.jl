@@ -7,6 +7,8 @@
 # Instead of building the HH channels from scratch like we did in Example 1, we'll 
 # use the pre-built channels from the `MTKNeuralToolkit.HodgkinHuxley` standard 
 # library to show how quickly you can spin up standard models.
+#
+# ---
 
 using MTKNeuralToolkit
 using MTKNeuralToolkit.HodgkinHuxley: SodiumChannel, PotassiumChannel, LeakChannel
@@ -15,13 +17,11 @@ using ModelingToolkitStandardLibrary.Blocks: Sine
 using OrdinaryDiffEq
 using Plots
 
-# ------------------------------------------------------------------------------
-# 1. Build Two Neurons using the Standard Library
-# ------------------------------------------------------------------------------
+# ## 1. Build Two Neurons using the Standard Library
 top = Scalar()
 
 # This helper function shows how to pass kwargs to the standard library channels. 
-# You can tweak maximal conductances (g) or reversal potentials (E_rev) without 
+# You can tweak maximal conductances (`g`) or reversal potentials (`E_rev`) without 
 # rewriting the gating dynamics from scratch.
 function build_hh_neuron(name::Symbol; gNa=120.0, ENa=50.0, gK=36.0, EK=-77.0, 
                                        gleak=0.3, Eleak=-54.4)
@@ -39,26 +39,30 @@ pre_neuron  = build_hh_neuron(:pre_neuron)
 # sodium conductance and a different leak reversal) to make it distinct.
 post_neuron = build_hh_neuron(:post_neuron; gNa=80.0, ENa=45.0, gleak=0.5)
 
+# ---
 
-# ------------------------------------------------------------------------------
-# 2. Define the Synapse
-# ------------------------------------------------------------------------------
+# ## 2. Define the Synapse
 # `ExpSynapse` is a continuous, sigmoid-driven exponential synapse. When the 
-# presynaptic voltage crosses the threshold (V_th), the gating variable `s` 
+# presynaptic voltage crosses the threshold (`V_th`), the gating variable `s` 
 # increases, injecting current into the postsynaptic compartment.
 
 @named excitatory_synapse = ExpSynapse(g_max=2.0, τ=5.0, E_rev=0.0, V_th=-20.0, slope=2.0)
 
-# Tip: To make this synapse inhibitory, you just change E_rev to a value below 
-# the postsynaptic resting potential (e.g., E_rev=-80.0). No other code changes needed.
-# @named inhibitory_synapse = ExpSynapse(g_max=2.0, τ=5.0, E_rev=-80.0, V_th=-20.0, slope=2.0)
+# !!! tip "Making an Inhibitory Synapse"
+#     To make this synapse inhibitory, you just change `E_rev` to a value below 
+#     the postsynaptic resting potential (e.g., `E_rev=-80.0`). No other code 
+#     changes are needed.
 #
-# Tip: Look at the source code for ExpSynapse: it's pretty simple! You can modify the equations to make your own custom synapse. The interface is extremely flexible: you can have complicated multi-state synapses 
+# ```julia
+# @named inhibitory_synapse = ExpSynapse(g_max=2.0, τ=5.0, E_rev=-80.0, V_th=-20.0, slope=2.0)
+# ```
 
+# !!! tip "Custom Synapses"
+#     Look at the source code for `ExpSynapse`: it's pretty simple! You can modify the equations to make your own custom synapse. The interface is extremely flexible: you can have complicated multi-state synapses.
 
-# ------------------------------------------------------------------------------
-# 3. Wire the Network using SynapseSpec
-# ------------------------------------------------------------------------------
+# ---
+
+# ## 3. Wire the Network using SynapseSpec
 # A `SynapseSpec` maps the pre- and post-synaptic voltages to the synapse block, 
 # and designates which current variable in the postsynaptic compartment will 
 # receive the injected current.
@@ -72,9 +76,9 @@ synapse_specs = [
     )
 ]
 
-# ------------------------------------------------------------------------------
-# 4. Driving Stimuli
-# ------------------------------------------------------------------------------
+# ---
+
+# ## 4. Driving Stimuli
 # We'll drive the presynaptic neuron with a time-varying sinusoidal current so 
 # it spikes rhythmically. The postsynaptic neuron receives no external drive, 
 # so any spiking it does is purely from the synaptic connection.
@@ -83,9 +87,9 @@ synapse_specs = [
 
 drivers = [(1, current_driver)] 
 
-# ------------------------------------------------------------------------------
-# 5. Build and Simulate the Network
-# ------------------------------------------------------------------------------
+# ---
+
+# ## 5. Build and Simulate the Network
 net = build_acausal_network([pre_neuron, post_neuron]; 
                             synapse_specs=synapse_specs, 
                             drivers=drivers, 
@@ -98,9 +102,9 @@ prob = ODEProblem(sys, [], (0.0, 200.0))
 println("Solving...")
 sol = solve(prob, Rosenbrock23())
 
-# ------------------------------------------------------------------------------
-# 6. Plot the Results
-# ------------------------------------------------------------------------------
+# ---
+
+# ## 6. Plot the Results
 p1 = plot(sol, idxs=[sys.pre_neuron.cap.v], 
           title="Presynaptic Neuron (Driven)", ylabel="V (mV)", legend=false)
 

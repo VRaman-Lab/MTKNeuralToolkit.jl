@@ -15,9 +15,7 @@ using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq
 using Plots
 
-# ------------------------------------------------------------------------------
-# 1. Define Gating Dynamics
-# ------------------------------------------------------------------------------
+# ## Define Gating Dynamics
 # We use standard HH gates for Na and K (fast spiking)
 hh_na_m = v -> (
     0.1 .* (v .+ 40.0) ./ (1.0 .- exp.(-(v .+ 40.0) ./ 10.0)),
@@ -48,9 +46,7 @@ KCa_tau_m(v) = 20
 KCa_dynamics = InfTauCa(KCa_m_inf, KCa_tau_m)
 kca_gates = [GateSpec(:mKCa, 4, 0.0, KCa_dynamics)]
 
-# ------------------------------------------------------------------------------
-# 2. Build the Compartment
-# ------------------------------------------------------------------------------
+# ## Build the Compartment
 top = Scalar()
 
 # Standard channels
@@ -77,9 +73,7 @@ neuron = build_compartment(cap, [na, k, leak, cav, kca];
                            topology=top, 
                            ion_config=ion_config)
 
-# ------------------------------------------------------------------------------
-# 3. Build and Simulate the Network
-# ------------------------------------------------------------------------------
+# ## Build and Simulate the Network
 drivers = [(1, 15.0)] # Current to elicit spikes and Calcium transients
 net = build_acausal_network([neuron]; drivers=drivers, name=:ca_neuron)
 
@@ -90,9 +84,7 @@ prob = ODEProblem(sys, [], (0.0, 800.0), jac=true, sparse=true)
 println("Solving...")
 sol = solve(prob, Rosenbrock23(), reltol=1e-4, abstol=1e-4)
 
-# ------------------------------------------------------------------------------
-# 4. Plot the Results
-# ------------------------------------------------------------------------------
+# ## Plot the Results
 # Let's look at the voltage, the dynamic Calcium concentration, and the KCa current.
 p1 = plot(sol, idxs=[sys.neuron.cap.v], title="Membrane Potential", ylabel="V (mV)", legend=false)
 

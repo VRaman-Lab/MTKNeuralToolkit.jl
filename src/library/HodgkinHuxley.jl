@@ -2,8 +2,9 @@
 # Standard Model Library
 # ==========================================
 module HodgkinHuxley
-    using ..MTKNeuralToolkit: GateSpec, GenericChannel, Scalar, Vectorized
-    using ModelingToolkit: t_nounits as t, @named
+    using ..MTKNeuralToolkit: GateSpec, GenericChannel, Scalar
+    using ModelingToolkit: t_nounits as t
+
 
     # Standard 1952 Hodgkin-Huxley gating dynamics (Dayan & Abbott formulation)
     # where V_rest = -65 mV.
