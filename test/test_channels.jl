@@ -1,12 +1,14 @@
 using SafeTestsets
+
 using MTKNeuralToolkit
-using ModelingToolkit: mtkcompile, @named, @variables, @parameters, t_nounits as t, D_nounits as D, extend, @component, @unpack, System
+using ModelingToolkit
+using ModelingToolkit: t_nounits as t, D_nounits as D
 using ModelingToolkitStandardLibrary.Electrical: OnePort
 using OrdinaryDiffEq
 using Test
 
 # ------------------------------------------------------------------------------
-# 1. Shared Gating Dynamics (from Example 1)
+# 1. Shared Gating Dynamics
 # ------------------------------------------------------------------------------
 hh_na_m = v -> (
     0.1 .* (v .+ 40.0) ./ (1.0 .- exp.(-(v .+ 40.0) ./ 10.0)),
@@ -53,14 +55,12 @@ top = Scalar()
     @test sol.retcode == ReturnCode.Success
     V = sol[sys.soma.soma_cap.v]
     @test all(!isnan, V)
-    # Check that it spikes: max voltage should be > 0 mV
     @test maximum(V) > 0.0
-    # Check that it starts from the initial condition
     @test V[1] ≈ -65.0
 end
 
 # ------------------------------------------------------------------------------
-# 2. Custom Components from First Principles (from Example 1b)
+# 2. Custom Components from First Principles
 # ------------------------------------------------------------------------------
 @component function CustomLeakChannel(; name, g=0.3, E_rev=-54.4)
     @named oneport = OnePort()
@@ -98,3 +98,22 @@ end
     net = build_acausal_network([soma]; drivers=drivers, name=:custom_neuron)
 
     sys = mtkcompile(net.sys)
+    prob = ODEProblem(sys, [], (0.0, 100.0))
+    sol = solve(prob, Rosenbrock23(), reltol=1e-4, abstol=1e-4)
+
+    @test sol.retcode == ReturnCode.Success
+    V = sol[sys.soma_custom.cap.v]
+    @test all(!isnan, V)
+    @test V[end] > -50.0
+end
+
+@testset "InfTau Helper Mechanics" begin
+    f = MTKNeuralToolkit.InfTau(n_inf, tau_n)
+    res = f(-65.0)
+    @test typeof(res) <: Tuple
+    @test length(res) == 2
+    
+    alpha, beta = res
+    @test alpha ≈ n_inf(-65.0) / tau_n(-65.0)
+    @test beta ≈ (1.0 - n_inf(-65.0)) / tau_n(-65.0)
+end

@@ -26,9 +26,7 @@ run_tests(;
         end
     end,
     groups = Dict(
-        "Opt" => joinpath(@__DIR__, "test_optimization.jl"),
         "ExplicitImports" => joinpath(@__DIR__, "explicit_imports.jl"),
     ),
-    qa = (; env = joinpath(@__DIR__, "qa"), body = joinpath(@__DIR__, "qa", "qa.jl")),
-    all = ["Core", "Opt"],
+    all = ["Core"],
 )

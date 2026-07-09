@@ -2,6 +2,7 @@
 # 
 # This example introduces the core acausal electrical primitives of MTKNeuralToolkit. We'll use a GateSpec helper to quickly make customisable ion channels and hook them up to run a hodgkin huxley neuron. Note that the next example builds the ion channels from first principles, which is barely any harder.
 #
+# ---
 
 using MTKNeuralToolkit
 using ModelingToolkit: mtkcompile, @named, t_nounits as t
@@ -10,11 +11,11 @@ using Plots
 
 # ## 1. Define Ion Channel Gating Dynamics
 # We use the standard Hodgkin-Huxley formulations (Dayan & Abbott) where 
-# V_rest = -65 mV. Here, we return the alpha and beta rates as a tuple.
+# $V_{\text{rest}} = -65 \text{ mV}$. Here, we return the alpha and beta rates as a tuple.
 
 hh_na_m = v -> (
     0.1 .* (v .+ 40.0) ./ (1.0 .- exp.(-(v .+ 40.0) ./ 10.0)),  #alpha_m
-    4.0 .* exp.(-(v .+ 65.0) ./ 18.0)                           #beta_m
+    4.0 .* exp.(-(v .+ 65.0) ./ 18.0)                           #beta_h
 )
 
 hh_na_h = v -> (
@@ -36,9 +37,11 @@ hh_k_n_ab = v -> (
 # Instead of writing out the alpha/beta functions, you might only have the steady-state 
 # (`inf`) and time constant (`tau`) curves. MTKNeuralToolkit provides the `InfTau` helper 
 # to convert these into the internal alpha/beta formulation:
-#   alpha = inf / tau
-#   beta  = (1 - inf) / tau
 #
+# ```math
+# \alpha = \frac{\text{inf}}{\tau} \quad \text{and} \quad \beta = \frac{1 - \text{inf}}{\tau}
+# ```
+# 
 # Here, we define `n_inf` and `tau_n` mathematically equivalent to Method 1 so you can 
 # see how it maps over:
 
@@ -48,9 +51,13 @@ n_inf(v)   = n_alpha(v) ./ (n_alpha(v) .+ n_beta(v))
 tau_n(v)   = 1.0 ./ (n_alpha(v) .+ n_beta(v))
 hh_k_n_inftau = InfTau(n_inf, tau_n)
 
+# ---
+
 # ## 2. Define Gate Specifications
-# At V = -65 mV, the steady-state values for the gates are:
-# m = 0.052, h = 0.596, n = 0.317
+# At $V = -65 \text{ mV}$, the steady-state values for the gates are:
+# - $m = 0.052$
+# - $h = 0.596$
+# - $n = 0.317$
 
 sodium_gates = [
     GateSpec(:m, 3, 0.052, hh_na_m), 
@@ -61,12 +68,15 @@ sodium_gates = [
 # but swapping it for `hh_k_n_ab` (the alpha/beta version) gives you the exact same 
 # dynamics.
 # 
-# NOTE: We name the K gate `n_gate` instead of just `n` to avoid a namespace clash 
-# with the negative electrical pin `n` in MTK's OnePort.
+# !!! note "Namespace Clashes"
+#     We name the K gate `n_gate` instead of just `n` to avoid a namespace clash 
+#     with the negative electrical pin `n` in MTK's OnePort.
 
 potassium_gates = [
     GateSpec(:n_gate, 4, 0.317, hh_k_n_inftau)
 ]
+
+# ---
 
 # ## 3. Build the Electrical Components
 # First, we instantiate the capacitor and our ion channels. 
@@ -80,6 +90,8 @@ top = Scalar() #Define a single-neuron topology
 @named k_ch  = GenericChannel(topology=top, g=36.0,  E_rev=-77.0, gates=potassium_gates)
 @named leak  = GenericChannel(topology=top, g=0.3,   E_rev=-54.4, gates=GateSpec[]) #No gates = pure leak
 
+# ---
+
 # ## 4. Assemble the Compartment
 # `build_compartment` connects all the positive pins  to the membrane voltage, grounds the negative pins, and wires up the injected currents. 
 # It returns a `Compartment` struct containing the MTK System and its exposed interfaces.
@@ -91,14 +103,16 @@ soma = build_compartment(soma_cap, channels;
                          V_init=-65.0, 
                          topology=top)
 
+# ---
+
 # ## 5. Build and Simulate the Network
 # A single neuron is just a network with one node. We'll drive it with a constant 
 # 10.0 mA current injection and solve it. Later examples make the simple extension of driving with time-varying currents.
 #
-# Note on compilation: The first time you run this, Julia has to JIT-compile the 
-# symbolic system and the differential equation solver. This "Time To First Plot" (TTFP) 
-# might take 10-30 seconds. Subsequent runs, or tweaking parameters and re-running, 
-# will be much faster.
+# !!! warning "Time To First Plot (TTFP)"
+#     The first time you run this, Julia has to JIT-compile the symbolic system and 
+#     the differential equation solver. This might take 10-30 seconds. Subsequent runs, 
+#     or tweaking parameters and re-running, will be much faster.
 
 drivers = [(1, 10.0)] #(Index 1, Current 10.0)
 
@@ -110,6 +124,8 @@ prob = ODEProblem(sys, [], (0.0, 100.0))
 
 println("Solving...")
 sol = solve(prob, Rosenbrock23(), reltol=1e-4, abstol=1e-4)
+
+# ---
 
 # ## 6. Plot the Results
 # Since MTKNeuralToolkit is built on ModelingToolkit, every variable in the system 

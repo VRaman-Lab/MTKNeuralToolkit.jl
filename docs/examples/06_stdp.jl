@@ -62,7 +62,7 @@ synapse_specs = [
 
 using ModelingToolkitStandardLibrary.Blocks: Sine
 
-# Post fires ~10ms before Pre (Phase offset of ~0.5 radians)
+# Pre fires ~10ms before Post (Phase offset of 1 radian)
 @named pre_driver  = Sine(amplitude=8.0, frequency=0.2, offset=8.0, phase=1.0)
 @named post_driver = Sine(amplitude=8.0, frequency=0.2, offset=8.0, phase=0.0)
 
