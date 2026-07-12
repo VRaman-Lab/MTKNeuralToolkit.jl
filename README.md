@@ -169,7 +169,6 @@ Always write it as `i ~ g * (v - E_rev)`.
 
 Why? Because `build_compartment` connects your channel to the membrane capacitor. By KCL, the current flowing *out* of the capacitor equals the current flowing *in* to the channel. The toolkit's capacitor equation is `D(v) = i_cap / C`. The maths automatically resolves to `D(v) = - sum(i_channels) / C = sum(g * (E_rev - v)) / C`. It perfectly matches your biology without you having to manually distribute negative signs. Stick to standard electrical convention inside your components and let the acausal framework do the algebra!
 
-Here are a couple of new sections you can drop right into the guide. They cover vectorized components and the two ways to wire up synapses, using the scripts you provided as a reference.
 
 ---
 

@@ -14,7 +14,7 @@
 # !!! note
 #     An annoyance is the need to build both scalar and vector definitions for the components. It would be nice (and maybe exists?) for MTK to have some automatic way of turning a scalar component into a vectorised one? I spent some time attempting this with postwalk, and got it running. But it was messy and dependeng on the MTK internal API so decided to demand a separate set of equations for a vectorised component.
 
-using MTKNeuralToolkit
+using MTKNeuralToolkit, Random
 using ModelingToolkit: mtkcompile, @named
 using OrdinaryDiffEq
 using Plots
@@ -64,6 +64,7 @@ pop_I = build_population(:pop_I, top_I)
 # The weight matrix W maps presynaptic populations to postsynaptic populations.
 # Dimensions must be (N_post, N_pre).
 
+Random.seed!(42) 
 W_EE = 0.5 .* rand(N_E, N_E)   #E -> E
 W_EI = 1.0 .* rand(N_I, N_E)   #E -> I
 W_IE = 2.0 .* rand(N_E, N_I)   #I -> E
@@ -82,7 +83,7 @@ synapse_specs = [syn_EE, syn_EI, syn_IE, syn_II]
 
 # ## 5. Driving Stimuli & Network Assembly
 # Give the excitatory population a constant current kick to start the activity
-drivers = [(1, 25.0)]
+drivers = [(1, 15.0)]
 
 net = build_acausal_network([pop_E, pop_I]; synapse_specs=synapse_specs, drivers=drivers)
 
@@ -105,9 +106,7 @@ prob = ODEProblem(sys, [], (0.0, 100.0), jac=true, sparse=true)
 # block-diagonal structure (intrinsic dynamics) with off-diagonal bands 
 # representing the synaptic couplings between the E and I populations.
 println("Plotting Jacobian sparsity pattern...")
-p_jac = spy(prob.f.jac_prototype, 
-            title="Jacobian Sparsity Pattern", 
-            legend=false)
+prob.f.jac_prototype
 
 println("Solving...")
 sol = solve(prob, Rosenbrock23())
@@ -115,9 +114,9 @@ sol = solve(prob, Rosenbrock23())
 # ## 6. Plot the Results
 # We splat the voltage array (...) to plot all individual elements in the population. Couldn't find a way to add numberings with MTK but I assume it exists...?
 p1 = plot(sol, idxs=[sys.pop_E.cap.v...], 
-          title="Excitatory Population", legend=false, ylabel="V (mV)")
+          title="Excitatory Population", legend=true, ylabel="V (mV)")
 p2 = plot(sol, idxs=[sys.pop_I.cap.v...], 
           title="Inhibitory Population", legend=false, ylabel="V (mV)", xlabel="Time (ms)")
 
 # Combine the simulation plots with the sparsity plot
-plot(p1, p2, p_jac, layout=(3,1), size=(800, 800))
+plot(p1, p2, layout=(2,1), size=(800, 800))
