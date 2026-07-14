@@ -66,8 +66,12 @@ net = build_acausal_network([pop_E, pop_I]; synapse_specs=synapse_specs, drivers
 prob = ODEProblem(net_compiled, [], (0.0, 100.0), jac=true, sparse=true)
 @time sol = solve(prob, Rosenbrock23())
 
+bo = detect_spikes(sol, net_compiled.pop_E.cap_E.v; mode=:fixed, threshold=-18.0, refractory_period=3.0), detect_spikes(sol, net_compiled.pop_I.cap_I.v; mode=:prominence, min_prominence=0.3, refractory_period=3.0)
+
 # === Plot ===
 p1 = plot(sol, idxs=[net_compiled.pop_E.cap_E.v...], title="Excitatory Population", legend=false)
+vline!(p1, vcat(bo[1][1]), label="spikes", color=:red, linestyle=:dash, alpha=0.3)
 p2 = plot(sol, idxs=[net_compiled.pop_I.cap_I.v...], title="Inhibitory Population", legend=false)
+vline!(p2, vcat(bo[2][1]), label="spikes", color=:red, linestyle=:dash, alpha=0.3)
 
 plot(p1, p2, layout=(2,1), size=(800,500))
